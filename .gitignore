@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------- datasets
+# KITTI raw (~2.5 GB) and KITTI 3D object detection (~27 GB).
+# Both are re-fetchable: scripts/00_* and `python -m pnd.fetch`
+data/
+**/data/
+*.zip
+*.zip.part
+*.zip.progress
+
+# ---------------------------------------------------------------- environments
+.venv/
+**/.venv/
+venv/
+env/
+ENV/
+
+# ---------------------------------------------------------------- python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# numba writes its AOT cache next to the source when cache=True
+*.nbi
+*.nbc
+__pycache__/*.nbi
+__pycache__/*.nbc
+
+# ---------------------------------------------------------------- training output
+cache/            # preprocessed proposal shards, rebuildable
+**/cache/
+runs/             # checkpoints, history.json
+**/runs/
+*.pt
+*.pth
+*.ckpt
+wandb/
+lightning_logs/
+tensorboard/
+events.out.tfevents.*
+
+# ---------------------------------------------------------------- build intermediates
+# Large base64 blobs that get inlined into phases/*.html by scripts/03 and 06.
+# The finished pages are committed; these are not.
+web/payload.json.txt
+web/frame.jpg.txt
+web/phase3.json
+web/meta.json
+web/_check.js
+web/_c3.js
+
+# logs
+*.log
+fetch.log
+
+# ---------------------------------------------------------------- os / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# ---------------------------------------------------------------- claude
+.claude/

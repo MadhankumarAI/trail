@@ -1,0 +1,663 @@
+<title>Anatomy of a Point</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap">
+
+<style>
+:root{
+  --ground:#F3F6F5; --surface:#FFFFFF; --surface-2:#E8EDEB;
+  --ink:#111A1B; --ink-2:#374749; --muted:#657678;
+  --line:#DBE3E1; --line-2:#C1CCC9;
+  --accent:#0F7C8A; --accent-soft:#DDF0F2; --accent-ink:#0A5A65;
+  --terrain:#2F7F4E; --static:#B0710D; --dynamic:#C1304F; --unknown:#9AA8AA;
+  --void:#0A1214;
+  --shadow:0 1px 2px rgba(17,26,27,.05), 0 10px 28px -14px rgba(17,26,27,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0B1214; --surface:#131C1E; --surface-2:#1A2528;
+  --ink:#E2EAE9; --ink-2:#AFBFBF; --muted:#7C8E90;
+  --line:#233130; --line-2:#334543;
+  --accent:#3BC6D6; --accent-soft:#0D2E33; --accent-ink:#6EDCE8;
+  --terrain:#4FBF7B; --static:#E0A83E; --dynamic:#F26B8A; --unknown:#5E7072;
+  --void:#070D0E;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -16px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --ground:#0B1214; --surface:#131C1E; --surface-2:#1A2528;
+  --ink:#E2EAE9; --ink-2:#AFBFBF; --muted:#7C8E90;
+  --line:#233130; --line-2:#334543;
+  --accent:#3BC6D6; --accent-soft:#0D2E33; --accent-ink:#6EDCE8;
+  --terrain:#4FBF7B; --static:#E0A83E; --dynamic:#F26B8A; --unknown:#5E7072;
+  --void:#070D0E;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Literata",Georgia,serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:"Chivo","Helvetica Neue",Arial,sans-serif;margin:0;line-height:1.18;text-wrap:balance;letter-spacing:-.015em}
+.mono,code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 26px}
+.prose{max-width:66ch}.prose p{margin:0 0 1em}.prose p:last-child{margin-bottom:0}
+a{color:var(--accent-ink);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+header{border-bottom:1px solid var(--line);background:var(--surface)}
+header .wrap{padding:48px 26px 40px}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);font-weight:500}
+h1{font-size:clamp(34px,5.4vw,54px);font-weight:700;margin:14px 0 0;letter-spacing:-.028em}
+.dek{max-width:60ch;margin-top:16px;font-size:19px;color:var(--ink-2)}
+.prov{margin-top:22px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:14px;max-width:70ch;line-height:1.7}
+
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+h2{font-size:clamp(23px,3vw,30px);font-weight:600;margin-bottom:16px}
+h3{font-size:19px;font-weight:600;margin:0 0 8px}
+.tag{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:10px}
+
+figure{margin:0}
+figcaption{font-size:13.5px;color:var(--muted);font-style:italic;margin-top:11px;max-width:66ch}
+img.frame{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+
+/* explorer */
+.explorer{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;margin-top:10px}
+.bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+  padding:12px 15px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.grp>span.lbl{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);margin-right:2px}
+button.b{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:500;
+  padding:6px 10px;border-radius:6px;border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-2);cursor:pointer}
+button.b:hover{border-color:var(--accent);color:var(--ink)}
+button.b[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+:root[data-theme="dark"] button.b[aria-pressed="true"]{color:#0B1214}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.b[aria-pressed="true"]{color:#0B1214}}
+input[type=range]{accent-color:var(--accent);width:130px}
+.canvas-wrap{position:relative;background:var(--void)}
+canvas#view{display:block;width:100%;height:auto;cursor:grab;touch-action:none}
+canvas#view.drag{cursor:grabbing}
+.hint{position:absolute;left:12px;bottom:10px;font-family:"JetBrains Mono",monospace;
+  font-size:10.5px;color:#7f9698;pointer-events:none;letter-spacing:.03em}
+.cbar{position:absolute;right:12px;top:12px;width:16px;height:150px;border-radius:3px;
+  border:1px solid rgba(255,255,255,.18)}
+.cbar-lab{position:absolute;right:34px;font-family:"JetBrains Mono",monospace;font-size:10px;color:#9fb2b3}
+
+.inspect{border-top:1px solid var(--line);padding:15px 18px;background:var(--surface);
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:12px 20px}
+.inspect .cell .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);display:block}
+.inspect .cell .v{font-family:"JetBrains Mono",monospace;font-size:16px;font-weight:500;
+  color:var(--ink);font-variant-numeric:tabular-nums}
+.inspect .cell .v.dim{color:var(--muted);font-weight:400}
+.inspect-note{grid-column:1/-1;font-size:14.5px;color:var(--ink-2);margin:0;
+  padding-top:11px;border-top:1px dashed var(--line-2)}
+
+canvas#range{display:block;width:100%;height:auto;image-rendering:pixelated;
+  border:1px solid var(--line);border-radius:8px;background:var(--void)}
+
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);
+  border-radius:0 9px 9px 0;padding:16px 20px;font-size:15.5px;color:var(--ink-2);max-width:78ch}
+.note b{color:var(--ink);font-weight:600}
+.note.warn{border-left-color:var(--static)}
+
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-top:20px}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:15px}
+th,td{text-align:left;padding:10px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-family:"Chivo",sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+pre{background:var(--void);color:#cfe3e4;border-radius:9px;padding:16px 18px;overflow-x:auto;
+  font-family:"JetBrains Mono",monospace;font-size:13.5px;line-height:1.6;margin:16px 0 0}
+pre .c{color:#6f8b8d}
+
+.ladder{display:flex;flex-direction:column;gap:0;margin-top:8px}
+.ladder .step{display:grid;grid-template-columns:52px 1fr;gap:18px;padding:16px 0;
+  border-bottom:1px solid var(--line);align-items:start}
+.ladder .step:last-child{border-bottom:none}
+.ladder .lv{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--accent);padding-top:4px}
+.ladder h4{font-size:16px;margin-bottom:4px}
+.ladder p{margin:0;font-size:15px;color:var(--ink-2)}
+
+ol.q{padding-left:0;list-style:none;counter-reset:q}
+ol.q li{counter-increment:q;display:grid;grid-template-columns:34px 1fr;gap:14px;
+  padding:14px 0;border-bottom:1px solid var(--line)}
+ol.q li:last-child{border-bottom:none}
+ol.q li::before{content:"Q" counter(q);font-family:"JetBrains Mono",monospace;font-size:12px;
+  color:var(--accent);padding-top:4px}
+ol.q p{margin:0;font-size:16px}
+footer{padding:36px 0 56px;color:var(--muted);font-size:14px}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="kicker">Phase 2 · Understanding 3D point clouds</div>
+    <h1>Anatomy of a Point</h1>
+    <p class="dek">One real LiDAR sweep, pulled apart to the last byte. Every number on this page was measured off the actual file — nothing here is simulated or illustrative.</p>
+    <div class="prov" id="prov"></div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The same instant, two sensors</span>
+    <h2>This is the scene</h2>
+    <figure>
+      <img class="frame" id="camframe" alt="Camera image from the KITTI vehicle at the same instant as the LiDAR sweep">
+      <figcaption>KITTI drive 2011_09_26_0001, frame 0, left colour camera. A residential street in Karlsruhe. The LiDAR you are about to take apart was spinning on the roof at this exact moment.</figcaption>
+    </figure>
+    <div class="note" style="margin-top:26px">
+      <b>Keep this image in your head.</b> Below, the same scene arrives as 121,015 rows of four numbers. Everything a network has to figure out — that there is a road, parked cars on the right, buildings, a cyclist — has to come out of those numbers alone. No colour. No texture. No pixels.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The file</span>
+    <h2>No header, no field names, no point count</h2>
+    <div class="prose">
+      <p>A KITTI Velodyne scan is a <span class="mono">.bin</span> file, and it is one of the least helpful file formats in computer vision: a flat wall of little-endian <span class="mono">float32</span> with nothing to tell you what any of it means. You are simply expected to know.</p>
+    </div>
+    <pre id="filemath"></pre>
+    <div class="prose" style="margin-top:20px">
+      <p>Four floats per point: <span class="mono">x, y, z, intensity</span>. And the frame those coordinates live in — <b>x forward, y left, z up, origin at the laser diode 1.73 m above the road</b> — is nowhere in the file either. Get the convention wrong and your entire scene is silently rotated, with no error anywhere.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The main event · drag it</span>
+    <h2>121,015 real points</h2>
+    <div class="prose" style="margin-bottom:20px">
+      <p><b>Drag to orbit. Scroll to zoom. Click any point to read its full record.</b> Start on <span class="mono">height</span>, then switch the colouring and watch completely different structure appear out of the identical geometry.</p>
+    </div>
+
+    <div class="explorer">
+      <div class="bar">
+        <div class="grp">
+          <span class="lbl">colour by</span>
+          <button class="b" data-c="height" aria-pressed="true">height</button>
+          <button class="b" data-c="intensity" aria-pressed="false">intensity</button>
+          <button class="b" data-c="range" aria-pressed="false">range</button>
+          <button class="b" data-c="ring" aria-pressed="false">ring</button>
+        </div>
+        <div class="grp">
+          <span class="lbl">ring</span>
+          <input type="range" id="ringsel" min="-1" max="63" value="-1" step="1">
+          <span class="mono" id="ringlab" style="font-size:11.5px;color:var(--muted);min-width:52px">all 64</span>
+        </div>
+        <div class="grp">
+          <span class="lbl">size</span>
+          <button class="b" data-s="1" aria-pressed="true">1</button>
+          <button class="b" data-s="2" aria-pressed="false">2</button>
+          <button class="b" data-s="3" aria-pressed="false">3</button>
+          <button class="b" id="reset">reset view</button>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="view"></canvas>
+        <div class="cbar" id="cbar"></div>
+        <div class="cbar-lab" id="cbHi" style="top:10px"></div>
+        <div class="cbar-lab" id="cbLo" style="top:158px"></div>
+        <div class="hint">drag · orbit&nbsp;&nbsp;scroll · zoom&nbsp;&nbsp;click · inspect a point</div>
+      </div>
+      <div class="inspect" id="inspect"></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">What the sensor actually measured</span>
+    <h2>Cartesian is a lie the file tells you</h2>
+    <div class="prose">
+      <p>Click a point above and look at the two halves of its record. The left half — <span class="mono">x, y, z</span> — is what's stored. The right half — <span class="mono">range, azimuth, elevation</span> — is what the sensor <em>measured</em>.</p>
+      <p>A spinning LiDAR does not know where anything is in Cartesian space. It knows three things: how long the pulse took to come back (<b>range</b>), which way the head was pointing when it fired (<b>azimuth</b>), and which of the 64 stacked lasers fired (<b>elevation</b>). The <span class="mono">x, y, z</span> in the file is a convenience conversion applied afterwards:</p>
+    </div>
+    <pre>x = r · cos(elev) · cos(azim)
+y = r · cos(elev) · sin(azim)
+z = r · sin(elev)</pre>
+    <div class="note" style="margin-top:22px">
+      <b>This is not trivia — it is the seed of your whole architecture.</b> The sensor's native coordinate system is spherical. Its samples are uniform in <em>angle</em>, not in space. Every consequence you will meet later — density collapsing with range, range images working at all, cylindrical voxels beating cubic ones — comes straight back to these three lines.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The hidden structure</span>
+    <h2>It isn't a blob. It's 64 nested cones.</h2>
+    <div class="prose" style="margin-bottom:20px">
+      <p>Set the colouring to <span class="mono">ring</span> and drag the ring slider. Each laser sits at a fixed elevation angle and paints one closed loop on the world. KITTI throws the laser id away, but it's recoverable — within one laser the azimuth climbs steadily and then wraps, so the wraps <em>are</em> the ring boundaries. There are exactly 64 of them.</p>
+      <p>Now unroll those cones. Put ring number on the vertical axis and azimuth on the horizontal, and the unordered set becomes a dense, ordinary image:</p>
+    </div>
+
+    <div class="explorer">
+      <div class="bar">
+        <div class="grp">
+          <span class="lbl">range image · colour by</span>
+          <button class="b ri" data-r="range" aria-pressed="true">range</button>
+          <button class="b ri" data-r="intensity" aria-pressed="false">intensity</button>
+          <button class="b ri" data-r="height" aria-pressed="false">height</button>
+        </div>
+        <div class="grp"><span class="lbl" id="rilab">64 × 1024</span></div>
+      </div>
+      <div style="padding:12px;background:var(--void)"><canvas id="range"></canvas></div>
+    </div>
+    <figcaption style="margin-top:12px">64 rows (one per laser) × 1024 azimuth columns. Vertically stretched — the real aspect is extremely wide and short. Black = no return.</figcaption>
+
+    <div class="note" style="margin-top:24px">
+      <b>Look what just happened.</b> An unordered set of 121,015 points with no neighbour structure became a <em>grid</em> — and a grid is something an ordinary 2D CNN can process at 100 FPS. That single move is the entire idea behind RangeNet++, SalsaNext and CENet, which you'll meet in Phase 7.
+      <br><br>
+      And look at the cost, which is equally visible: the image is full of black gaps where nothing returned, distant objects are squeezed into a handful of pixels, and any two surfaces along the same ray collapsed into one — whatever was behind is simply gone.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Measured, not assumed</span>
+    <h2>Density really does collapse with range</h2>
+    <div class="prose"><p>Counted directly off this scan. Volume is the hemispherical shell between the two radii.</p></div>
+    <div class="scroll"><table id="shelltab"></table></div>
+
+    <div class="prose" style="margin-top:32px">
+      <p>And here is what happens if you drop that same scan into a uniform 3D voxel grid over a 160 × 160 × 10 m box, which is roughly the naive thing to do:</p>
+    </div>
+    <div class="scroll"><table id="voxtab"></table></div>
+    <div class="note warn" style="margin-top:22px">
+      <b>Read the last column.</b> At 5 cm resolution the grid is <b>99.9955% empty</b>. A dense 3D convolution would spend essentially all of its arithmetic multiplying zeros. This one number is the entire reason sparse convolution libraries exist, and it is the strongest single slide you can put in your SIH deck.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The thing that eats a week of your life</span>
+    <h2>Coordinate frames</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Frame</th><th>x</th><th>y</th><th>z</th><th>Where you meet it</th></tr></thead>
+        <tbody>
+          <tr><td><b>Velodyne / ROS REP-103</b></td><td class="n">forward</td><td class="n">left</td><td class="n">up</td><td>The file you just loaded. Also every ROS robot.</td></tr>
+          <tr><td><b>KITTI camera</b></td><td class="n">right</td><td class="n">down</td><td class="n">forward</td><td>The image above. Completely different — and you need <span class="mono">Tr_velo_to_cam</span> to cross between them.</td></tr>
+          <tr><td><b>nuScenes ego</b></td><td class="n">forward</td><td class="n">left</td><td class="n">up</td><td>Same as Velodyne, but the LiDAR has its own extrinsic on top.</td></tr>
+          <tr><td><b>Open3D / graphics</b></td><td class="n">right</td><td class="n">up</td><td class="n">backward</td><td>Your viewer. Why your scene renders on its side.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:22px">
+      <b>There is no error message for a wrong frame.</b> Everything runs, the loss goes down, and the results are quietly nonsense. Write down the frame at every boundary in your pipeline, and render the axes on screen before you trust anything.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Your question, directly</span>
+    <h2>How you reconstruct a scene from points</h2>
+    <div class="prose" style="margin-bottom:12px">
+      <p>"Reconstruction" means six different things, and they form a ladder. Each rung buys structure the rung below didn't have — and the top of the ladder is where your problem statement lives.</p>
+    </div>
+    <div class="ladder">
+      <div class="step"><div class="lv">L0</div><div>
+        <h4>Render the points</h4>
+        <p>What the explorer above does. The cloud already <em>is</em> the scene, sampled. Your eye does the reconstruction. Good enough to debug with, useless to a planner.</p>
+      </div></div>
+      <div class="step"><div class="lv">L1</div><div>
+        <h4>Re-impose order — the range image</h4>
+        <p>Invert the spherical projection to recover the <span class="mono">(ring, azimuth)</span> grid. Free, lossless-ish for a single sweep, and instantly makes 2D convolutions and neighbour lookups legal.</p>
+      </div></div>
+      <div class="step"><div class="lv">L2</div><div>
+        <h4>Discretise space — voxels or occupancy</h4>
+        <p>Bin points into cells and keep an occupancy or feature vector per cell. Fixes the "unordered set" problem for good. Pay for it in the emptiness you just measured — hence sparse tensors.</p>
+      </div></div>
+      <div class="step"><div class="lv">L3</div><div>
+        <h4>Fit surfaces</h4>
+        <p>Estimate a normal per point from its neighbours, then run Poisson reconstruction, ball pivoting, or a TSDF to get a watertight mesh. This is what people usually mean by "3D reconstruction". Beautiful, slow, and largely irrelevant to driving.</p>
+      </div></div>
+      <div class="step"><div class="lv">L4</div><div>
+        <h4>Accumulate over time</h4>
+        <p>Register consecutive sweeps with ICP or a SLAM system, transform them into a common frame, and stack them. <b>This is the only rung that recovers occluded geometry</b> — because you drive past and look again. It is also where moving objects start smearing into streaks, which is the problem Phase 7's motion models exist to solve.</p>
+      </div></div>
+      <div class="step"><div class="lv">L5</div><div>
+        <h4>Label it, then flatten it</h4>
+        <p>Classify every point, project down into a 2.5D grid carrying height plus semantics. <b>This is PS 26053.</b> Notice it is not L3 — you are not building a mesh, you are building a labelled heightfield, and that is a far cheaper target.</p>
+      </div></div>
+    </div>
+    <div class="note warn" style="margin-top:24px">
+      <b>The one hard limit.</b> No rung invents data. Everything hidden behind that parked car in the image is absent from the file, and no reconstruction recovers it — only motion (L4) or a prior does. Reconstruction reorganises what was measured. It never adds.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Before Phase 3</span>
+    <h2>Check yourself</h2>
+    <ol class="q">
+      <li><p>The file has no header. You're handed a <span class="mono">.bin</span> of 2,097,152 bytes. How many points, and how do you know?</p></li>
+      <li><p>A point reads <span class="mono">z = -1.71</span>. Is it on the road? What do you need to know before answering?</p></li>
+      <li><p>Two points have identical intensity. Name three physically different reasons that could happen.</p></li>
+      <li><p>Why is the range image mostly black at the top rows? (Colour by <span class="mono">ring</span> and set the slider near 0 if you're stuck.)</p></li>
+      <li><p>You voxelise at 5 cm and get 0.0045% occupancy. If you halve the voxel size to 2.5 cm, does occupancy percentage go up or down — and why?</p></li>
+      <li><p>Your PS wants 5 cm cells at 10 m. From the beam-spacing table: how many rings actually hit a 5 cm patch of road at 10 m? At 60 m? What does that imply about the far field?</p></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Phase 2 of 16 · 3D Deep Learning Research Roadmap · SIH 2026 PS 26053.<br>
+    Data: KITTI raw, drive 2011_09_26_0001, frame 0 — Velodyne HDL-64E. Geiger et al., <em>Vision meets Robotics: The KITTI Dataset</em>, IJRR 2013.
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var META = __META__;
+var IMG   = "__IMG__";
+var B64   = "__PAYLOAD__";
+
+document.getElementById("camframe").src = "data:image/jpeg;base64," + IMG;
+
+/* ---------- decode ---------- */
+function unb64(s){var b=atob(s),n=b.length,u=new Uint8Array(n);for(var i=0;i<n;i++)u[i]=b.charCodeAt(i);return u;}
+var raw = unb64(B64);
+var N = META.n;
+var q   = new Int16Array(raw.buffer, 0, N*3);
+var INT = new Uint8Array(raw.buffer, N*6, N);
+var RNG_ = new Uint8Array(raw.buffer, N*7, N);
+
+var PX=new Float32Array(N),PY=new Float32Array(N),PZ=new Float32Array(N);
+var RAD=new Float32Array(N),AZI=new Float32Array(N),ELV=new Float32Array(N);
+for(var i=0;i<N;i++){
+  var x=q[i*3]/100, y=q[i*3+1]/100, z=q[i*3+2]/100;
+  PX[i]=x;PY[i]=y;PZ[i]=z;
+  var r=Math.sqrt(x*x+y*y+z*z);
+  RAD[i]=r;
+  AZI[i]=Math.atan2(y,x)*180/Math.PI;
+  ELV[i]=Math.asin(Math.max(-1,Math.min(1,z/(r||1e-9))))*180/Math.PI;
+}
+
+/* ---------- provenance ---------- */
+document.getElementById("prov").innerHTML =
+  "source &nbsp;KITTI raw · 2011_09_26_drive_0001 · frame 0 · Velodyne HDL-64E<br>"+
+  "file &nbsp;&nbsp;&nbsp;"+META.file+" &nbsp;·&nbsp; "+META.bytes.toLocaleString()+" bytes<br>"+
+  "points &nbsp;"+META.n.toLocaleString()+" &nbsp;·&nbsp; "+META.nRings+" lasers recovered &nbsp;·&nbsp; "+
+  "range "+META.stats.r[0].toFixed(2)+"–"+META.stats.r[1].toFixed(2)+" m &nbsp;·&nbsp; "+
+  "elevation "+META.stats.elev[1].toFixed(2)+"° to "+META.stats.elev[0].toFixed(2)+"°";
+
+document.getElementById("filemath").innerHTML =
+  '<span class="c"># the entire loader. that is not an abbreviation.</span>\n'+
+  'pts = np.fromfile(path, dtype=np.float32).reshape(-1, 4)\n\n'+
+  '<span class="c"># how you know the point count, with no header to ask</span>\n'+
+  META.bytes.toLocaleString()+' bytes / 4 bytes per float32  = '+(META.bytes/4).toLocaleString()+' floats\n'+
+  (META.bytes/4).toLocaleString()+' floats / 4 floats per point = '+META.n.toLocaleString()+' points';
+
+/* ---------- colour maps ---------- */
+function ramp(stops){
+  var lut=new Uint8Array(256*3);
+  for(var i=0;i<256;i++){
+    var t=i/255*(stops.length-1), k=Math.min(Math.floor(t),stops.length-2), f=t-k;
+    for(var c=0;c<3;c++) lut[i*3+c]=stops[k][c]+(stops[k+1][c]-stops[k][c])*f;
+  }
+  return lut;
+}
+var TURBO=ramp([[48,18,59],[70,107,227],[38,187,197],[104,229,104],[219,214,54],[250,138,46],[190,39,15]]);
+var VIRID=ramp([[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]]);
+var INFER=ramp([[8,4,20],[87,16,110],[188,55,84],[249,142,9],[252,255,164]]);
+var RINGL=(function(){var l=new Uint8Array(256*3);
+  for(var i=0;i<256;i++){var h=(i*37)%360,s=.62,v=.95,
+    c=v*s,x2=c*(1-Math.abs((h/60)%2-1)),m=v-c,r,g,b;
+    if(h<60){r=c;g=x2;b=0}else if(h<120){r=x2;g=c;b=0}else if(h<180){r=0;g=c;b=x2}
+    else if(h<240){r=0;g=x2;b=c}else if(h<300){r=x2;g=0;b=c}else{r=c;g=0;b=x2}
+    l[i*3]=(r+m)*255;l[i*3+1]=(g+m)*255;l[i*3+2]=(b+m)*255;}
+  return l;})();
+
+var MODES={
+  height:   {lut:VIRID, get:function(i){return PZ[i]},  lo:-3.0, hi:1.5,  unit:"m", name:"height z"},
+  intensity:{lut:INFER, get:function(i){return INT[i]/255}, lo:0, hi:1,   unit:"",  name:"intensity"},
+  range:    {lut:TURBO, get:function(i){return RAD[i]},  lo:0,   hi:60,   unit:"m", name:"range"},
+  ring:     {lut:RINGL, get:function(i){return RNG_[i]}, lo:0,   hi:63,   unit:"",  name:"laser id"}
+};
+var cmode="height", psize=1, ringSel=-1;
+
+/* ---------- camera ---------- */
+var cam={yaw:-0.62, pitch:0.40, dist:52, focal:760};
+var DEF={yaw:-0.62, pitch:0.40, dist:52, focal:760};
+
+var cv=document.getElementById("view"), ctx=cv.getContext("2d",{alpha:false});
+var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1,2);
+var img=null, buf=null, zbuf=null;
+
+function resize(){
+  var w=cv.parentElement.clientWidth;
+  var h=Math.round(Math.min(560, Math.max(360, w*0.52)));
+  cv.style.height=h+"px";
+  W=Math.round(w*dpr); H=Math.round(h*dpr);
+  cv.width=W; cv.height=H;
+  img=ctx.createImageData(W,H);
+  buf=new Uint32Array(img.data.buffer);
+  zbuf=new Float32Array(W*H);
+  draw();
+}
+
+function project(i,o){
+  var ca=Math.cos(cam.yaw), sa=Math.sin(cam.yaw);
+  var X=PX[i]*ca-PY[i]*sa, Y=PX[i]*sa+PY[i]*ca, Z=PZ[i];
+  var cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
+  var Y2=Y*cp-Z*sp, Z2=Y*sp+Z*cp;
+  var d=Y2+cam.dist;
+  if(d<0.6) return false;
+  var f=cam.focal*dpr;
+  o.x=(W>>1)+f*X/d; o.y=(H>>1)-f*Z2/d; o.d=d;
+  return true;
+}
+
+function draw(){
+  if(!buf) return;
+  var bg = 0xff0e0a07 & 0; // placeholder, set below
+  var css=getComputedStyle(document.documentElement).getPropertyValue("--void").trim();
+  var m=/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(css);
+  var br=m?parseInt(m[1],16):10, bgn=m?parseInt(m[2],16):18, bb=m?parseInt(m[3],16):20;
+  bg=(255<<24)|(bb<<16)|(bgn<<8)|br;
+  buf.fill(bg);
+  zbuf.fill(1e9);
+
+  var M=MODES[cmode], lut=M.lut, lo=M.lo, hi=M.hi, span=hi-lo;
+  var ca=Math.cos(cam.yaw), sa=Math.sin(cam.yaw);
+  var cp=Math.cos(cam.pitch), sp=Math.sin(cam.pitch);
+  var f=cam.focal*dpr, cx=W>>1, cy=H>>1;
+  var s=psize*dpr|0; if(s<1)s=1;
+
+  for(var i=0;i<N;i++){
+    if(ringSel>=0 && RNG_[i]!==ringSel) continue;
+    var X=PX[i]*ca-PY[i]*sa, Y=PX[i]*sa+PY[i]*ca, Z=PZ[i];
+    var Y2=Y*cp-Z*sp, Z2=Y*sp+Z*cp;
+    var d=Y2+cam.dist;
+    if(d<0.6) continue;
+    var sx=(cx+f*X/d)|0, sy=(cy-f*Z2/d)|0;
+    if(sx<0||sy<0||sx>=W-s||sy>=H-s) continue;
+    var t=(M.get(i)-lo)/span; t=t<0?0:t>1?1:t;
+    var ci=(t*255)|0, r=lut[ci*3], g=lut[ci*3+1], b=lut[ci*3+2];
+    var col=(255<<24)|(b<<16)|(g<<8)|r;
+    for(var dy=0;dy<s;dy++){
+      var row=(sy+dy)*W+sx;
+      for(var dx=0;dx<s;dx++){
+        var k=row+dx;
+        if(d<zbuf[k]){ zbuf[k]=d; buf[k]=col; }
+      }
+    }
+  }
+  ctx.putImageData(img,0,0);
+  updateBar();
+}
+
+function updateBar(){
+  var M=MODES[cmode], st=[];
+  for(var i=0;i<=10;i++){var ci=(i/10*255)|0;
+    st.push("rgb("+M.lut[ci*3]+","+M.lut[ci*3+1]+","+M.lut[ci*3+2]+") "+(100-i*10)+"%");}
+  document.getElementById("cbar").style.background="linear-gradient(to bottom,"+st.join(",")+")";
+  document.getElementById("cbHi").textContent=M.hi+M.unit;
+  document.getElementById("cbLo").textContent=M.lo+M.unit;
+}
+
+/* ---------- interaction ---------- */
+var dragging=false, lx=0, ly=0, moved=0;
+cv.addEventListener("pointerdown",function(e){dragging=true;moved=0;lx=e.clientX;ly=e.clientY;
+  cv.classList.add("drag");cv.setPointerCapture(e.pointerId);});
+cv.addEventListener("pointermove",function(e){
+  if(!dragging)return;
+  var dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX; ly=e.clientY;
+  moved+=Math.abs(dx)+Math.abs(dy);
+  cam.yaw+=dx*0.006;
+  cam.pitch=Math.max(-0.25,Math.min(1.45,cam.pitch+dy*0.005));
+  draw();
+});
+cv.addEventListener("pointerup",function(e){
+  dragging=false;cv.classList.remove("drag");
+  if(moved<4) pick(e);
+});
+cv.addEventListener("wheel",function(e){
+  e.preventDefault();
+  cam.dist=Math.max(6,Math.min(160,cam.dist*(e.deltaY>0?1.12:0.89)));
+  draw();
+},{passive:false});
+
+function pick(e){
+  var rect=cv.getBoundingClientRect();
+  var mx=(e.clientX-rect.left)*dpr, my=(e.clientY-rect.top)*dpr;
+  var ca=Math.cos(cam.yaw),sa=Math.sin(cam.yaw),cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  var f=cam.focal*dpr,cx=W>>1,cy=H>>1,best=-1,bd=22*dpr*22*dpr,bz=1e9;
+  for(var i=0;i<N;i++){
+    if(ringSel>=0 && RNG_[i]!==ringSel) continue;
+    var X=PX[i]*ca-PY[i]*sa,Y=PX[i]*sa+PY[i]*ca,Z=PZ[i];
+    var Y2=Y*cp-Z*sp,Z2=Y*sp+Z*cp,d=Y2+cam.dist;
+    if(d<0.6)continue;
+    var sx=cx+f*X/d, sy=cy-f*Z2/d;
+    var ddx=sx-mx, ddy=sy-my, dd=ddx*ddx+ddy*ddy;
+    if(dd<bd && d<bz){ bd=dd; bz=d; best=i; }
+  }
+  if(best>=0) showPoint(best);
+}
+
+function cell(k,v,dim){return '<div class="cell"><span class="k">'+k+'</span><span class="v'+(dim?' dim':'')+'">'+v+'</span></div>';}
+function showPoint(i){
+  var el=document.getElementById("inspect");
+  el.innerHTML =
+    cell("index", i.toLocaleString(), true)+
+    cell("x", PX[i].toFixed(3)+" m")+
+    cell("y", PY[i].toFixed(3)+" m")+
+    cell("z", PZ[i].toFixed(3)+" m")+
+    cell("intensity", (INT[i]/255).toFixed(3))+
+    cell("range", RAD[i].toFixed(3)+" m")+
+    cell("azimuth", AZI[i].toFixed(2)+"°")+
+    cell("elevation", ELV[i].toFixed(2)+"°")+
+    cell("laser", "#"+RNG_[i])+
+    cell("height AGL", (PZ[i]+META.sensorHeight).toFixed(3)+" m")+
+    '<p class="inspect-note">Stored in the file: <b>x, y, z, intensity</b> — 16 bytes. '+
+    'Measured by the sensor: <b>range, azimuth, laser</b>. '+
+    'Height above ground is z + '+META.sensorHeight+' m, the mounting height — which is written nowhere in the file.</p>';
+}
+function blankInspect(){
+  document.getElementById("inspect").innerHTML =
+    cell("index","—",true)+cell("x","—",true)+cell("y","—",true)+cell("z","—",true)+
+    cell("intensity","—",true)+cell("range","—",true)+cell("azimuth","—",true)+
+    cell("elevation","—",true)+cell("laser","—",true)+cell("height AGL","—",true)+
+    '<p class="inspect-note">Click any point in the view above to read its complete record.</p>';
+}
+
+document.querySelectorAll("button.b[data-c]").forEach(function(b){
+  b.addEventListener("click",function(){
+    cmode=b.dataset.c;
+    document.querySelectorAll("button.b[data-c]").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false")});
+    draw();
+  });
+});
+document.querySelectorAll("button.b[data-s]").forEach(function(b){
+  b.addEventListener("click",function(){
+    psize=+b.dataset.s;
+    document.querySelectorAll("button.b[data-s]").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false")});
+    draw();
+  });
+});
+document.getElementById("reset").addEventListener("click",function(){
+  cam.yaw=DEF.yaw;cam.pitch=DEF.pitch;cam.dist=DEF.dist;draw();
+});
+document.getElementById("ringsel").addEventListener("input",function(e){
+  ringSel=+e.target.value;
+  document.getElementById("ringlab").textContent = ringSel<0 ? "all 64" :
+    ("#"+ringSel+"  "+(META.ringElev[ringSel]!=null?META.ringElev[ringSel].toFixed(2)+"°":""));
+  draw();
+});
+
+/* ---------- range image ---------- */
+var RW=1024, RH=64, rmode="range";
+var rcv=document.getElementById("range");
+rcv.width=RW; rcv.height=RH; rcv.style.height="240px";
+function drawRange(){
+  var c=rcv.getContext("2d"), im=c.createImageData(RW,RH), b=new Uint32Array(im.data.buffer);
+  b.fill(0xff0e0d07&0xff000000);
+  var depth=new Float32Array(RW*RH); depth.fill(1e9);
+  var M = rmode==="range"?MODES.range : rmode==="intensity"?MODES.intensity : MODES.height;
+  for(var i=0;i<N;i++){
+    var col=Math.floor((AZI[i]+180)/360*RW); if(col<0)col=0; if(col>=RW)col=RW-1;
+    var row=RNG_[i]; if(row<0||row>=RH)continue;
+    var k=row*RW+col;
+    if(RAD[i]<depth[k]){
+      depth[k]=RAD[i];
+      var t=(M.get(i)-M.lo)/(M.hi-M.lo); t=t<0?0:t>1?1:t;
+      var ci=(t*255)|0;
+      b[k]=(255<<24)|(M.lut[ci*3+2]<<16)|(M.lut[ci*3+1]<<8)|M.lut[ci*3];
+    }
+  }
+  var filled=0; for(var j=0;j<RW*RH;j++) if(depth[j]<1e9) filled++;
+  document.getElementById("rilab").textContent =
+    RH+" × "+RW+"  ·  "+(100*filled/(RW*RH)).toFixed(1)+"% of pixels have a return";
+  c.putImageData(im,0,0);
+}
+document.querySelectorAll("button.b.ri").forEach(function(b){
+  b.addEventListener("click",function(){
+    rmode=b.dataset.r;
+    document.querySelectorAll("button.b.ri").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false")});
+    drawRange();
+  });
+});
+
+/* ---------- tables ---------- */
+(function(){
+  var h='<thead><tr><th>Shell</th><th>Points</th><th>Volume</th><th>Points per m³</th><th>Relative</th></tr></thead><tbody>';
+  var d0=META.shells[0].density;
+  META.shells.forEach(function(s){
+    h+='<tr><td class="n">'+s.lo+'–'+s.hi+' m</td><td class="n">'+s.n.toLocaleString()+
+       '</td><td class="n">'+s.vol.toLocaleString()+' m³</td><td class="n">'+s.density.toFixed(3)+
+       '</td><td class="n">'+(s.density/d0*100).toFixed(2)+'%</td></tr>';
+  });
+  document.getElementById("shelltab").innerHTML=h+"</tbody>";
+
+  var v='<thead><tr><th>Voxel size</th><th>Cells in a dense grid</th><th>Cells actually occupied</th><th>Occupancy</th></tr></thead><tbody>';
+  META.voxels.forEach(function(x){
+    v+='<tr><td class="n">'+(x.res*100).toFixed(0)+' cm</td><td class="n">'+x.dense.toLocaleString()+
+       '</td><td class="n">'+x.occ.toLocaleString()+'</td><td class="n">'+x.pct.toFixed(4)+'%</td></tr>';
+  });
+  document.getElementById("voxtab").innerHTML=v+"</tbody>";
+})();
+
+/* ---------- go ---------- */
+blankInspect();
+window.addEventListener("resize",resize);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){draw();drawRange();});
+new MutationObserver(function(){draw();}).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+resize();
+drawRange();
+})();
+</script>

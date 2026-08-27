@@ -1,0 +1,798 @@
+<title>Five Ways to Find a Neighbour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap">
+
+<style>
+:root{
+  --ground:#F3F6F5;--surface:#FFFFFF;--surface-2:#E8EDEB;
+  --ink:#111A1B;--ink-2:#374749;--muted:#657678;
+  --line:#DBE3E1;--line-2:#C1CCC9;
+  --accent:#0F7C8A;--accent-soft:#DDF0F2;--accent-ink:#0A5A65;
+  --hot:#C1304F;--warm:#B0710D;--cool:#2F7F4E;
+  --void:#0A1214;
+  --shadow:0 1px 2px rgba(17,26,27,.05),0 10px 28px -14px rgba(17,26,27,.22);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0B1214;--surface:#131C1E;--surface-2:#1A2528;
+  --ink:#E2EAE9;--ink-2:#AFBFBF;--muted:#7C8E90;
+  --line:#233130;--line-2:#334543;
+  --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
+  --hot:#F26B8A;--warm:#E0A83E;--cool:#4FBF7B;
+  --void:#070D0E;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --ground:#0B1214;--surface:#131C1E;--surface-2:#1A2528;
+  --ink:#E2EAE9;--ink-2:#AFBFBF;--muted:#7C8E90;
+  --line:#233130;--line-2:#334543;
+  --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
+  --hot:#F26B8A;--warm:#E0A83E;--cool:#4FBF7B;
+  --void:#070D0E;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Literata",Georgia,serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:"Chivo","Helvetica Neue",Arial,sans-serif;margin:0;line-height:1.18;text-wrap:balance;letter-spacing:-.015em}
+.mono,code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 26px}
+.prose{max-width:66ch}.prose p{margin:0 0 1em}.prose p:last-child{margin-bottom:0}
+a{color:var(--accent-ink);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+header{border-bottom:1px solid var(--line);background:var(--surface)}
+header .wrap{padding:48px 26px 40px}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);font-weight:500}
+h1{font-size:clamp(32px,5vw,52px);font-weight:700;margin:14px 0 0;letter-spacing:-.028em}
+.dek{max-width:60ch;margin-top:16px;font-size:19px;color:var(--ink-2)}
+
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+h2{font-size:clamp(23px,3vw,30px);font-weight:600;margin-bottom:16px}
+h3{font-size:19px;font-weight:600;margin:0 0 8px}
+.tag{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:10px}
+.fam{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--accent);display:block;margin-bottom:10px}
+
+.demo{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;margin:22px 0}
+.dbar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+  padding:12px 15px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.grp{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.grp .lbl{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+button.b{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:500;
+  padding:6px 11px;border-radius:6px;border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-2);cursor:pointer}
+button.b:hover{border-color:var(--accent);color:var(--ink)}
+button.b[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+:root[data-theme="dark"] button.b[aria-pressed="true"]{color:#0B1214}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.b[aria-pressed="true"]{color:#0B1214}}
+input[type=range]{accent-color:var(--accent);width:120px}
+.val{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink);min-width:56px;
+  font-variant-numeric:tabular-nums}
+canvas{display:block;width:100%;height:auto;background:var(--void)}
+canvas.drag{cursor:grabbing}
+canvas.grab{cursor:grab}
+.readout{padding:14px 18px;border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:12px 18px}
+.readout .k{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);display:block}
+.readout .v{font-family:"JetBrains Mono",monospace;font-size:17px;font-weight:500;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.readout .v.hot{color:var(--hot)}
+.readout .v.cool{color:var(--cool)}
+.readout .note{grid-column:1/-1;font-size:14.5px;color:var(--ink-2);margin:0;
+  padding-top:10px;border-top:1px dashed var(--line-2);font-family:"Literata",serif}
+
+/* permutation demo */
+.perm{padding:20px 18px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px}
+.chip{font-family:"JetBrains Mono",monospace;font-size:13px;padding:7px 11px;border-radius:6px;
+  background:var(--surface-2);border:1px solid var(--line-2);min-width:52px;text-align:center;
+  transition:transform .18s ease}
+.chip.win{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+:root[data-theme="dark"] .chip.win{color:#0B1214}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip.win{color:#0B1214}}
+.aggs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.agg{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:var(--surface)}
+.agg h4{font-size:14px;margin-bottom:3px}
+.agg .f{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--muted);margin-bottom:9px}
+.agg .out{font-family:"JetBrains Mono",monospace;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.agg .verdict{font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.agg.ok{border-color:var(--cool)}.agg.ok .out{color:var(--cool)}.agg.ok .verdict{color:var(--cool)}
+.agg.bad{border-color:var(--hot)}.agg.bad .out{color:var(--hot)}.agg.bad .verdict{color:var(--hot)}
+
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);
+  border-radius:0 9px 9px 0;padding:16px 20px;font-size:15.5px;color:var(--ink-2);max-width:78ch}
+.note b{color:var(--ink);font-weight:600}
+.note.warn{border-left-color:var(--warm)}
+
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-top:20px}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:15px}
+th,td{text-align:left;padding:10px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-family:"Chivo",sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+pre{background:var(--void);color:#cfe3e4;border-radius:9px;padding:15px 17px;overflow-x:auto;
+  font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.6;margin:16px 0 0}
+pre .c{color:#6f8b8d}
+figcaption{font-size:13.5px;color:var(--muted);font-style:italic;margin-top:10px;max-width:68ch}
+footer{padding:36px 0 56px;color:var(--muted);font-size:14px}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="kicker">Phase 3 · How the models work</div>
+    <h1>Five Ways to Find a Neighbour</h1>
+    <p class="dek">Every architecture for point clouds is answering one question, and it is not the question the paper titles suggest. Each demo below runs the actual mechanism on real points from your KITTI scan.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The spine</span>
+    <h2>Convolution needs neighbours. A set has none.</h2>
+    <div class="prose">
+      <p>In Phase 2 we shuffled all 121,015 rows of the scan and every measurable property came out identical. The row number carries no information. But convolution, attention, and any notion of "local shape" all need to know <em>which points are near which</em>.</p>
+      <p>So every family below invents a neighbourhood definition. That single choice determines the architecture, its speed, and its failure modes. Everything else is detail.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Family</th><th>"Neighbours" means…</th><th>What it costs</th></tr></thead>
+        <tbody>
+          <tr><td><b>PointNet</b></td><td>nothing — there are none</td><td>All local geometry</td></tr>
+          <tr><td><b>PointNet++</b></td><td>points inside radius <span class="mono">r</span></td><td>Expensive to find</td></tr>
+          <tr><td><b>Range image</b></td><td>adjacent pixels in <span class="mono">(ring, azimuth)</span></td><td>Occluded surfaces collapse</td></tr>
+          <tr><td><b>Sparse voxel</b></td><td>adjacent cells in <span class="mono">(x, y, z)</span></td><td>Quantisation; uniform prior</td></tr>
+          <tr><td><b>Cylindrical</b></td><td>adjacent cells in <span class="mono">(ρ, θ, z)</span></td><td>Cells distort with range</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Mechanism 0 · the rule everything obeys</span>
+    <h2>Why max-pooling, of all things</h2>
+    <div class="prose">
+      <p>A network that reads a set must return the same answer for every ordering of that set. There are 121,015! orderings of your scan. The only way to survive that is a <b>symmetric function</b> — one whose output genuinely does not depend on input order.</p>
+      <p>Press shuffle. Watch which aggregator survives.</p>
+    </div>
+
+    <div class="demo">
+      <div class="dbar">
+        <div class="grp"><span class="lbl">8 points, one feature each</span></div>
+        <div class="grp"><button class="b" id="shuf">shuffle the set</button><span class="val" id="shufn">0 shuffles</span></div>
+      </div>
+      <div class="perm">
+        <div class="chips" id="permchips"></div>
+        <div class="aggs">
+          <div class="agg ok">
+            <h4>Max-pooling</h4>
+            <div class="f">out = max(f₁ … f₈)</div>
+            <div class="out" id="aggmax">—</div>
+            <div class="verdict" id="vmax">symmetric · order-proof</div>
+          </div>
+          <div class="agg ok">
+            <h4>Sum</h4>
+            <div class="f">out = Σ fᵢ</div>
+            <div class="out" id="aggsum">—</div>
+            <div class="verdict">symmetric · order-proof</div>
+          </div>
+          <div class="agg bad">
+            <h4>First three, concatenated</h4>
+            <div class="f">out = [f₁, f₂, f₃]</div>
+            <div class="out" id="aggcat">—</div>
+            <div class="verdict" id="vcat">not symmetric · broken</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>That is the whole of PointNet's contribution.</b> Push every point through the same little MLP, then collapse with max. Order-proof by construction, and it handles any number of points because max doesn't care how many you give it. Both of Phase 2's first two constraints, solved in one line.
+      <br><br>
+      Sum works too, and some networks use it. Max wins in practice because it is robust to the density variation we measured — a cell with 200 points and a cell with 6 give comparable maxima, but wildly different sums.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 1a · PointNet</span>
+    <h2>The network only ever sees a skeleton</h2>
+    <div class="prose">
+      <p>Max-pooling has a strange consequence. For each output feature, exactly <em>one</em> point supplies the maximum. Every other point contributes nothing to that dimension. The points that win at least one dimension are called the <b>critical point set</b> — and they are the only points the global feature actually depends on.</p>
+      <p>Below is a real object from your scan: <span class="mono">787 points</span>, <span class="mono" id="objext"></span>, sitting <span class="mono" id="objdist"></span> from the sensor. Vehicle-sized. Drag to rotate. The slider sets how many features the layer computes.</p>
+    </div>
+
+    <div class="demo">
+      <div class="dbar">
+        <div class="grp"><span class="lbl">feature dims K</span>
+          <input type="range" id="kdim" min="4" max="1024" value="64" step="4">
+          <span class="val" id="kval">64</span></div>
+        <div class="grp">
+          <button class="b" id="critShow" aria-pressed="true">show critical points</button>
+          <button class="b" id="critSpin">spin</button>
+        </div>
+      </div>
+      <canvas id="cvCrit" class="grab"></canvas>
+      <div class="readout" id="roCrit"></div>
+    </div>
+    <figcaption>Untrained random projection — the critical-point effect is a property of max-pooling itself, not of learned weights, so random weights demonstrate it honestly.</figcaption>
+
+    <div class="note" style="margin-top:22px">
+      <b>Slide K down to 16 and watch.</b> A handful of points — always the extremities, the silhouette — carry the entire global feature. Everything interior is invisible to the network. Push K up and the set grows, but it saturates: past a few hundred features you are re-selecting the same outline.
+      <br><br>
+      This is why plain PointNet cannot segment a street. It knows the convex outline of the whole scene and nothing about what is happening at any particular point. The fix has to be locality.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 1b · PointNet++</span>
+    <h2>Set abstraction, step by step</h2>
+    <div class="prose">
+      <p>PointNet++ builds locality by hand, in three moves that repeat at every level. Step through them on the same object.</p>
+      <p><b>Sample</b> — pick <span class="mono">M</span> centroids with farthest-point sampling, so they spread out instead of clumping where the points are dense. <b>Group</b> — collect every point within radius <span class="mono">r</span> of each centroid. <b>Pool</b> — run a mini-PointNet on each group, so each ball becomes one feature vector at its centroid. The cloud is now <span class="mono">M</span> points with richer features, and you do it again with a bigger radius.</p>
+    </div>
+
+    <div class="demo">
+      <div class="dbar">
+        <div class="grp">
+          <button class="b sa" data-st="0" aria-pressed="true">1 · all points</button>
+          <button class="b sa" data-st="1">2 · sample</button>
+          <button class="b sa" data-st="2">3 · group</button>
+          <button class="b sa" data-st="3">4 · pool</button>
+        </div>
+        <div class="grp"><span class="lbl">M</span><input type="range" id="msel" min="4" max="96" value="32" step="1"><span class="val" id="mval">32</span></div>
+        <div class="grp"><span class="lbl">radius</span><input type="range" id="rsel" min="10" max="120" value="45" step="5"><span class="val" id="rval">0.45 m</span></div>
+      </div>
+      <canvas id="cvSA" class="grab"></canvas>
+      <div class="readout" id="roSA"></div>
+    </div>
+
+    <div class="note warn" style="margin-top:22px">
+      <b>Now look at the cost readout.</b> Farthest-point sampling is inherently sequential — each centroid needs the distance from every point to every centroid already chosen. On this 787-point object that is trivial. On the full 121,015-point scan, with the M values real networks use, it is the reason PointNet++ runs at 1–2 FPS and scores around 20 mIoU on KITTI-scale data.
+      <br><br>
+      <b>RandLA-Net's</b> entire insight is to delete this step. Replace farthest-point sampling with <em>random</em> sampling — which is free — and compensate for the points you carelessly drop with a local feature aggregation module that widens the receptive field fast. That one substitution takes the family from unusable to ~54 mIoU at real speed.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 2 · projection</span>
+    <h2>Or: cheat, and make it an image again</h2>
+    <div class="prose">
+      <p>You already built this one in Phase 2. Bin by <span class="mono">(ring, azimuth)</span> and the unordered set becomes a dense 2D array where neighbours are simply adjacent pixels. Ordinary 2D CNNs apply, and they run at 30–100 FPS.</p>
+      <p><b>RangeNet++</b> (52 mIoU) → <b>SalsaNext</b> (~59) → <b>CENet</b> (~65). The lineage is mostly better 2D backbones and better loss functions on the same projection.</p>
+      <p>The cost was visible in your own range image: black gaps everywhere, distant objects squeezed into a few pixels, and any two surfaces along one ray collapsed into one — whatever was behind is gone, not hidden. Thin structures land on pixel boundaries and blur away, which hurts poles and pedestrians specifically. RangeNet++ needs a GPU nearest-neighbour post-pass just to undo its own projection damage.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 3 · sparse voxels</span>
+    <h2>Bin it, then only compute where something is</h2>
+    <div class="prose">
+      <p>Drop points into a grid and the cell index <em>becomes</em> the ordering — permutation invariance for free, and neighbours are grid-adjacent cells so 3D convolution applies directly.</p>
+      <p>Phase 2 measured the catch: at 5 cm the grid is <b>99.9955% empty</b>. So store only occupied cells in a hash table and compute only there. Empty space costs nothing. That is sparse convolution, and that number is why it exists.</p>
+      <p>Below is a top-down view of the non-ground points within 24 m of your sensor. We're looking straight down purely so the grid is visible; the real thing is 3D.</p>
+    </div>
+
+    <div class="demo">
+      <div class="dbar">
+        <div class="grp"><span class="lbl">cell size</span><input type="range" id="vsel" min="20" max="200" value="60" step="10"><span class="val" id="vval">0.60 m</span></div>
+        <div class="grp"><span class="lbl">conv layers</span><input type="range" id="lsel" min="0" max="5" value="0" step="1"><span class="val" id="lval">0</span></div>
+        <div class="grp">
+          <button class="b sp" data-sp="sub" aria-pressed="true">submanifold</button>
+          <button class="b sp" data-sp="reg">regular sparse</button>
+        </div>
+      </div>
+      <canvas id="cvVox"></canvas>
+      <div class="readout" id="roVox"></div>
+    </div>
+
+    <div class="note warn" style="margin-top:22px">
+      <b>Drag "conv layers" up with <span class="mono">regular sparse</span> selected.</b> A regular sparse convolution writes an output wherever its kernel touches an active site — so the active set dilates outward one ring per layer. After a few layers your beautifully sparse tensor has gone dense and the entire advantage is gone.
+      <br><br>
+      <b>Submanifold</b> sparse convolution fixes it by refusing to create new active sites: output exists only where input existed. Compare the two counts. This distinction is the single most important implementation detail in the whole family, and it is the thing people miss when their sparse network mysteriously runs out of VRAM at layer six.
+    </div>
+    <div class="note" style="margin-top:16px">
+      <b>MinkowskiNet / MinkUNet</b> is the canonical implementation, ~63 mIoU at 13–36 FPS. <b>SPVCNN</b> notes that voxelising smears small objects — a distant pedestrian becomes three cells with no shape — so it runs a point branch alongside the voxel branch and fuses them, recovering exactly the pedestrian and pole classes you are graded on.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 4 · cylindrical</span>
+    <h2>Bin the way the sensor measures</h2>
+    <div class="prose">
+      <p>Phase 2 measured density collapsing from 40.9 points/m³ in the near field to 0.007 at 40–80 m — a factor of about 5,000. A uniform Cartesian grid ignores that completely: every cell is the same size, so near cells overflow and far cells sit empty.</p>
+      <p>Cylinder3D asks the obvious question. The sensor measures in <span class="mono">(range, azimuth, elevation)</span> — so why bin in <span class="mono">(x, y, z)</span>? Bin in <span class="mono">(ρ, θ, z)</span> instead and cells grow with range automatically, at roughly the rate density falls.</p>
+      <p>Switch the grid and watch the colouring even out. Cell colour is points-per-cell, on the same scale for both.</p>
+    </div>
+
+    <div class="demo">
+      <div class="dbar">
+        <div class="grp">
+          <button class="b gt" data-g="cart" aria-pressed="true">cartesian</button>
+          <button class="b gt" data-g="polar">cylindrical</button>
+        </div>
+        <div class="grp"><span class="lbl">resolution</span><input type="range" id="gres" min="1" max="5" value="3" step="1"><span class="val" id="gresv">medium</span></div>
+        <div class="grp"><button class="b" id="gpts" aria-pressed="true">show points</button></div>
+      </div>
+      <canvas id="cvGrid"></canvas>
+      <div class="readout" id="roGrid"></div>
+    </div>
+
+    <h3 style="margin:30px 0 6px">Measured on all 104,039 points inside 24 m</h3>
+    <div class="scroll"><table id="cellTab"></table></div>
+
+    <div class="note" style="margin-top:22px">
+      <b>Read the p95 column.</b> That is the spread the network actually has to cope with. Cartesian cells are far more unequal — a handful hold hundreds of points while most hold a few. Cylindrical cells are much more evenly loaded, which means every cell's pooled feature is computed from a comparable sample. Better-conditioned inputs, and an inductive bias that matches the physics we measured rather than fighting it.
+      <br><br>
+      Cylinder3D adds two more pieces on top: <b>asymmetrical residual blocks</b>, with kernels shaped like cars and poles instead of cubes, and a <b>dimension-decomposition context module</b> that builds high-rank global context cheaply from per-axis low-rank parts. Together: <b>~68 mIoU at ~10 FPS</b> — the best accuracy-per-frame in the practical range.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="fam">Family 5 · serialised attention</span>
+    <h2>The ceiling, and why you probably won't ship it</h2>
+    <div class="prose">
+      <p><b>Point Transformer V3</b> (2024) sidesteps neighbour search entirely. It orders points along a space-filling curve — Hilbert or Z-order — which has the property that points close along the curve are usually close in space. Then it runs attention over contiguous patches of that sequence. No kNN, no ball query, no voxel hashing: just sort, then attend.</p>
+      <p>It trades exact neighbourhoods for scale, and it wins — <b>low-to-mid 70s mIoU</b>, the current leader on large outdoor benchmarks. <b>SphereFormer</b> takes a related route with radial window attention, specifically to help sparse distant points.</p>
+      <p>Why it is not your answer: heavy to train, hungry for VRAM, and every point of mIoU costs frames — while your problem statement grades latency explicitly. On a 4 GB GTX 1650 this is not a realistic training target. Cite it as the ceiling and as evidence you know where the field is.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Putting it together</span>
+    <h2>The five, side by side</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Family</th><th>Representative</th><th class="n">mIoU</th><th class="n">Speed</th><th>Breaks on</th></tr></thead>
+        <tbody>
+          <tr><td>Point, global</td><td class="mono">PointNet</td><td class="n">~15</td><td class="n">fast</td><td>Everything local</td></tr>
+          <tr><td>Point, hierarchical</td><td class="mono">PointNet++</td><td class="n">~20</td><td class="n">1–2 FPS</td><td>Scale — sampling cost</td></tr>
+          <tr><td>Point, efficient</td><td class="mono">RandLA-Net</td><td class="n">~54</td><td class="n">usable</td><td>Fine detail</td></tr>
+          <tr><td>Projection</td><td class="mono">CENet / SalsaNext</td><td class="n">59–65</td><td class="n">30–100 FPS</td><td>Occlusion, thin objects</td></tr>
+          <tr><td>Sparse voxel</td><td class="mono">MinkUNet / SPVCNN</td><td class="n">~63</td><td class="n">13–36 FPS</td><td>Quantisation; uniform prior</td></tr>
+          <tr style="background:var(--accent-soft)"><td>Cylindrical</td><td class="mono">Cylinder3D</td><td class="n">~68</td><td class="n">~10 FPS</td><td>Very near field</td></tr>
+          <tr><td>Serialised attention</td><td class="mono">PTv3</td><td class="n">72–75</td><td class="n">slow</td><td>Your GPU budget</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figcaption>Published SemanticKITTI test figures. Re-check the live leaderboard before quoting any of these in a deck — they move.</figcaption>
+
+    <div class="note" style="margin-top:26px">
+      <b>One thing this table cannot tell you.</b> Every number above is single-frame semantic segmentation. None of these models can distinguish a parked car from a moving one, because a single sweep does not contain motion. That is a separate model class working on stacked, ego-motion-compensated scans — and it is the third of your problem statement's three tasks. We will get to it.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Phase 3 of 16 · 3D Deep Learning Research Roadmap · SIH 2026 PS 26053.<br>
+    All demos run on KITTI raw drive 2011_09_26_0001 frame 0 — the same scan taken apart in Phase 2.
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var D = __P3__;
+var OBJ = D.object.pts, NOBJ = OBJ.length;
+var BEV = D.bev.pts, RAD = D.bev.radius;
+var CS = D.cellstats;
+
+document.getElementById("objext").textContent =
+  D.object.extent[0]+" × "+D.object.extent[1]+" × "+D.object.extent[2]+" m";
+document.getElementById("objdist").textContent = D.object.distance+" m";
+
+function cssv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+function hex(c){var m=/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(c);
+  return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[128,128,128];}
+var DPR=Math.min(window.devicePixelRatio||1,2);
+function fit(cv,ratio){
+  var w=cv.parentElement.clientWidth;
+  var h=Math.round(Math.max(300,Math.min(520,w*ratio)));
+  cv.style.height=h+"px"; cv.width=Math.round(w*DPR); cv.height=Math.round(h*DPR);
+  return cv.getContext("2d");
+}
+function clearBg(ctx,cv){ctx.fillStyle=cssv("--void");ctx.fillRect(0,0,cv.width,cv.height);}
+function rgba(c,a){return "rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+
+/* ================= 0. permutation ================= */
+(function(){
+  var vals=[0.31,0.87,0.44,0.62,0.19,0.95,0.53,0.08], order=[0,1,2,3,4,5,6,7], nsh=0;
+  var chips=document.getElementById("permchips");
+  function render(){
+    chips.innerHTML="";
+    var mx=-1,mi=-1;
+    order.forEach(function(o,pos){ if(vals[o]>mx){mx=vals[o];mi=pos;} });
+    order.forEach(function(o,pos){
+      var el=document.createElement("div");
+      el.className="chip"+(pos===mi?" win":"");
+      el.textContent=vals[o].toFixed(2);
+      chips.appendChild(el);
+    });
+    var sum=0; order.forEach(function(o){sum+=vals[o];});
+    document.getElementById("aggmax").textContent=mx.toFixed(2);
+    document.getElementById("aggsum").textContent=sum.toFixed(2);
+    document.getElementById("aggcat").textContent=
+      "["+vals[order[0]].toFixed(2)+", "+vals[order[1]].toFixed(2)+", "+vals[order[2]].toFixed(2)+"]";
+    document.getElementById("shufn").textContent=nsh+(nsh===1?" shuffle":" shuffles");
+  }
+  document.getElementById("shuf").addEventListener("click",function(){
+    for(var i=order.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));
+      var t=order[i];order[i]=order[j];order[j]=t;}
+    nsh++; render();
+  });
+  render();
+})();
+
+/* ================= shared 3D projection ================= */
+function orbit(cv,drawFn){
+  var st={yaw:0.6,pitch:0.35,drag:false,lx:0,ly:0};
+  cv.addEventListener("pointerdown",function(e){st.drag=true;st.lx=e.clientX;st.ly=e.clientY;
+    cv.classList.add("drag");cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener("pointermove",function(e){
+    if(!st.drag)return;
+    st.yaw+=(e.clientX-st.lx)*0.008;
+    st.pitch=Math.max(-0.6,Math.min(1.3,st.pitch+(e.clientY-st.ly)*0.006));
+    st.lx=e.clientX;st.ly=e.clientY;drawFn();
+  });
+  cv.addEventListener("pointerup",function(){st.drag=false;cv.classList.remove("drag");});
+  return st;
+}
+function proj(p,st,s,cx,cy){
+  var ca=Math.cos(st.yaw),sa=Math.sin(st.yaw);
+  var X=p[0]*ca-p[1]*sa, Y=p[0]*sa+p[1]*ca, Z=p[2];
+  var cp=Math.cos(st.pitch),sp=Math.sin(st.pitch);
+  var Y2=Y*cp-Z*sp, Z2=Y*sp+Z*cp;
+  return [cx+X*s, cy-Z2*s, Y2];
+}
+
+/* ================= 1. critical points ================= */
+(function(){
+  var cv=document.getElementById("cvCrit"),ctx=null,st=orbit(cv,function(){draw();});
+  var K=64, show=true, spin=null, crit=new Uint8Array(NOBJ), ncrit=0;
+
+  function compute(){
+    crit=new Uint8Array(NOBJ);
+    var seed=12345;
+    function rnd(){seed=(seed*1664525+1013904223)&0x7fffffff;return seed/0x7fffffff-0.5;}
+    for(var k=0;k<K;k++){
+      var a=rnd(),b=rnd(),c=rnd(),best=-1e18,bi=0;
+      for(var i=0;i<NOBJ;i++){
+        var v=OBJ[i][0]*a+OBJ[i][1]*b+OBJ[i][2]*c;
+        if(v>best){best=v;bi=i;}
+      }
+      crit[bi]=1;
+    }
+    ncrit=0; for(var i2=0;i2<NOBJ;i2++) if(crit[i2]) ncrit++;
+  }
+  function draw(){
+    if(!ctx)return;
+    clearBg(ctx,cv);
+    var s=Math.min(cv.width,cv.height)/(D.object.scale*2.7), cx=cv.width/2, cy=cv.height/2;
+    var dim=hex(cssv("--muted")), acc=hex(cssv("--accent")), hot=hex(cssv("--hot"));
+    for(var i=0;i<NOBJ;i++){
+      var p=proj(OBJ[i],st,s,cx,cy);
+      var isC=show&&crit[i];
+      ctx.fillStyle=isC?rgba(hot,1):rgba(dim,0.42);
+      var r=isC?3.2*DPR:1.5*DPR;
+      ctx.beginPath();ctx.arc(p[0],p[1],r,0,6.283);ctx.fill();
+    }
+    document.getElementById("roCrit").innerHTML=
+      '<div><span class="k">points in object</span><span class="v">'+NOBJ+'</span></div>'+
+      '<div><span class="k">feature dims K</span><span class="v">'+K+'</span></div>'+
+      '<div><span class="k">critical points</span><span class="v hot">'+ncrit+'</span></div>'+
+      '<div><span class="k">of the cloud</span><span class="v hot">'+(100*ncrit/NOBJ).toFixed(1)+'%</span></div>'+
+      '<div><span class="k">ignored entirely</span><span class="v">'+(NOBJ-ncrit)+'</span></div>'+
+      '<p class="note">Only the red points affect the global feature. Every grey point could be '+
+      'deleted and the output of this layer would not change by one bit.</p>';
+  }
+  document.getElementById("kdim").addEventListener("input",function(e){
+    K=+e.target.value; document.getElementById("kval").textContent=K; compute(); draw();
+  });
+  document.getElementById("critShow").addEventListener("click",function(){
+    show=!show; this.setAttribute("aria-pressed",show?"true":"false"); draw();
+  });
+  document.getElementById("critSpin").addEventListener("click",function(){
+    if(spin){clearInterval(spin);spin=null;this.setAttribute("aria-pressed","false");}
+    else{spin=setInterval(function(){st.yaw+=0.012;draw();},33);this.setAttribute("aria-pressed","true");}
+  });
+  window.addEventListener("resize",function(){ctx=fit(cv,0.55);draw();});
+  ctx=fit(cv,0.55); compute(); draw();
+})();
+
+/* ================= 2. set abstraction ================= */
+(function(){
+  var cv=document.getElementById("cvSA"),ctx=null,st=orbit(cv,function(){draw();});
+  var M=32, R=0.45, step=0, sel=[], groups=[];
+
+  function fps(){
+    var d=new Float64Array(NOBJ); for(var i=0;i<NOBJ;i++)d[i]=1e18;
+    sel=[0];
+    for(var m=1;m<M;m++){
+      var last=OBJ[sel[sel.length-1]],best=-1,bd=-1;
+      for(var j=0;j<NOBJ;j++){
+        var dx=OBJ[j][0]-last[0],dy=OBJ[j][1]-last[1],dz=OBJ[j][2]-last[2];
+        var dd=dx*dx+dy*dy+dz*dz;
+        if(dd<d[j])d[j]=dd;
+        if(d[j]>bd){bd=d[j];best=j;}
+      }
+      sel.push(best);
+    }
+  }
+  function group(){
+    groups=[]; var r2=R*R, covered=new Uint8Array(NOBJ);
+    for(var m=0;m<sel.length;m++){
+      var c=OBJ[sel[m]],g=[];
+      for(var i=0;i<NOBJ;i++){
+        var dx=OBJ[i][0]-c[0],dy=OBJ[i][1]-c[1],dz=OBJ[i][2]-c[2];
+        if(dx*dx+dy*dy+dz*dz<=r2){g.push(i);covered[i]=1;}
+      }
+      groups.push(g);
+    }
+    var cov=0; for(var k=0;k<NOBJ;k++) if(covered[k])cov++;
+    groups.covered=cov;
+  }
+  function draw(){
+    if(!ctx)return;
+    clearBg(ctx,cv);
+    var s=Math.min(cv.width,cv.height)/(D.object.scale*2.7),cx=cv.width/2,cy=cv.height/2;
+    var dim=hex(cssv("--muted")),acc=hex(cssv("--accent")),warm=hex(cssv("--warm")),cool=hex(cssv("--cool"));
+
+    if(step<3){
+      for(var i=0;i<NOBJ;i++){
+        var p=proj(OBJ[i],st,s,cx,cy);
+        ctx.fillStyle=rgba(dim,step===0?0.7:0.28);
+        ctx.beginPath();ctx.arc(p[0],p[1],1.5*DPR,0,6.283);ctx.fill();
+      }
+    }
+    if(step===2){
+      ctx.strokeStyle=rgba(acc,0.30);ctx.lineWidth=1*DPR;
+      for(var m=0;m<sel.length;m++){
+        var p2=proj(OBJ[sel[m]],st,s,cx,cy);
+        ctx.beginPath();ctx.arc(p2[0],p2[1],R*s,0,6.283);ctx.stroke();
+      }
+      ctx.fillStyle=rgba(warm,0.85);
+      for(var m2=0;m2<groups.length;m2++){
+        for(var gi=0;gi<groups[m2].length;gi++){
+          var pg=proj(OBJ[groups[m2][gi]],st,s,cx,cy);
+          ctx.beginPath();ctx.arc(pg[0],pg[1],1.7*DPR,0,6.283);ctx.fill();
+        }
+      }
+    }
+    if(step>=1){
+      for(var m3=0;m3<sel.length;m3++){
+        var pc=proj(OBJ[sel[m3]],st,s,cx,cy);
+        ctx.fillStyle=step===3?rgba(cool,1):rgba(acc,1);
+        ctx.beginPath();ctx.arc(pc[0],pc[1],(step===3?5:3.4)*DPR,0,6.283);ctx.fill();
+      }
+    }
+    var avg=groups.length?(groups.reduce(function(a,g){return a+g.length;},0)/groups.length):0;
+    var ops=NOBJ*M;
+    var msg=["All 787 points, no structure. This is what the layer receives.",
+             "Farthest-point sampling picked "+M+" centroids. Note how evenly they spread — that is the point of FPS over random choice.",
+             "Every point within "+R.toFixed(2)+" m of a centroid joins that ball. Grey points fell in no ball and are dropped at this level.",
+             "Each ball collapsed to one feature vector at its centroid. The layer output is "+M+" points, down from 787."][step];
+    document.getElementById("roSA").innerHTML=
+      '<div><span class="k">input points</span><span class="v">'+NOBJ+'</span></div>'+
+      '<div><span class="k">centroids M</span><span class="v cool">'+M+'</span></div>'+
+      '<div><span class="k">radius</span><span class="v">'+R.toFixed(2)+' m</span></div>'+
+      '<div><span class="k">avg per ball</span><span class="v">'+avg.toFixed(1)+'</span></div>'+
+      '<div><span class="k">points covered</span><span class="v">'+(groups.covered||0)+'</span></div>'+
+      '<div><span class="k">FPS distance ops</span><span class="v hot">'+ops.toLocaleString()+'</span></div>'+
+      '<p class="note">'+msg+'</p>';
+  }
+  function recompute(){fps();group();draw();}
+  document.querySelectorAll("button.b.sa").forEach(function(b){
+    b.addEventListener("click",function(){
+      step=+b.dataset.st;
+      document.querySelectorAll("button.b.sa").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false");});
+      draw();
+    });
+  });
+  document.getElementById("msel").addEventListener("input",function(e){
+    M=+e.target.value;document.getElementById("mval").textContent=M;recompute();
+  });
+  document.getElementById("rsel").addEventListener("input",function(e){
+    R=+e.target.value/100;document.getElementById("rval").textContent=R.toFixed(2)+" m";recompute();
+  });
+  window.addEventListener("resize",function(){ctx=fit(cv,0.55);draw();});
+  ctx=fit(cv,0.55); recompute();
+})();
+
+/* ================= 3. voxels + sparse conv ================= */
+(function(){
+  var cv=document.getElementById("cvVox"),ctx=null;
+  var V=0.6, layers=0, mode="sub";
+
+  function occupied(v){
+    var s=new Set();
+    for(var i=0;i<BEV.length;i++){
+      s.add(Math.floor(BEV[i][0]/v)+","+Math.floor(BEV[i][1]/v));
+    }
+    return s;
+  }
+  function dilate(s,n){
+    var cur=s;
+    for(var k=0;k<n;k++){
+      var nx=new Set();
+      cur.forEach(function(key){
+        var p=key.split(","),a=+p[0],b=+p[1];
+        for(var dx=-1;dx<=1;dx++)for(var dy=-1;dy<=1;dy++) nx.add((a+dx)+","+(b+dy));
+      });
+      cur=nx;
+      if(cur.size>140000) break;
+    }
+    return cur;
+  }
+  function draw(){
+    if(!ctx)return;
+    clearBg(ctx,cv);
+    var s=Math.min(cv.width,cv.height)/(RAD*2.15),cx=cv.width/2,cy=cv.height/2;
+    var base=occupied(V);
+    var act=(mode==="reg"&&layers>0)?dilate(base,layers):base;
+    var acc=hex(cssv("--accent")),hot=hex(cssv("--hot")),dim=hex(cssv("--muted"));
+    var cell=V*s;
+
+    act.forEach(function(key){
+      var p=key.split(","),a=+p[0],b=+p[1];
+      var isNew=!base.has(key);
+      ctx.fillStyle=isNew?rgba(hot,0.42):rgba(acc,0.60);
+      ctx.fillRect(cx+a*cell, cy-(b+1)*cell, Math.max(cell-0.6,0.7), Math.max(cell-0.6,0.7));
+    });
+    ctx.fillStyle=rgba(dim,0.5);
+    for(var i=0;i<BEV.length;i+=2){
+      ctx.fillRect(cx+BEV[i][0]*s, cy-BEV[i][1]*s, 1.1*DPR,1.1*DPR);
+    }
+    var side=Math.ceil(2*RAD/V);
+    var dense=side*side;
+    document.getElementById("roVox").innerHTML=
+      '<div><span class="k">cell size</span><span class="v">'+V.toFixed(2)+' m</span></div>'+
+      '<div><span class="k">dense grid</span><span class="v">'+dense.toLocaleString()+'</span></div>'+
+      '<div><span class="k">occupied</span><span class="v cool">'+base.size.toLocaleString()+'</span></div>'+
+      '<div><span class="k">occupancy</span><span class="v cool">'+(100*base.size/dense).toFixed(3)+'%</span></div>'+
+      '<div><span class="k">active after '+layers+'</span><span class="v'+(act.size>base.size?' hot':'')+'">'+act.size.toLocaleString()+'</span></div>'+
+      '<div><span class="k">growth</span><span class="v'+(act.size>base.size?' hot':'')+'">'+(act.size/base.size).toFixed(2)+'×</span></div>'+
+      '<p class="note">'+(mode==="reg"
+        ? (layers===0?"Regular sparse convolution. Raise the layer count and watch the active set spread."
+           :"After "+layers+" layer"+(layers>1?"s":"")+" the active set has grown "+(act.size/base.size).toFixed(2)+"×. Red cells hold no points at all — the network is now computing over empty space.")
+        : "Submanifold sparse convolution: output sites are exactly the input sites, no matter how deep you go. The count does not move.")+'</p>';
+  }
+  document.getElementById("vsel").addEventListener("input",function(e){
+    V=+e.target.value/100;document.getElementById("vval").textContent=V.toFixed(2)+" m";draw();
+  });
+  document.getElementById("lsel").addEventListener("input",function(e){
+    layers=+e.target.value;document.getElementById("lval").textContent=layers;draw();
+  });
+  document.querySelectorAll("button.b.sp").forEach(function(b){
+    b.addEventListener("click",function(){
+      mode=b.dataset.sp;
+      document.querySelectorAll("button.b.sp").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false");});
+      draw();
+    });
+  });
+  window.addEventListener("resize",function(){ctx=fit(cv,0.72);draw();});
+  ctx=fit(cv,0.72);draw();
+})();
+
+/* ================= 4. cartesian vs cylindrical ================= */
+(function(){
+  var cv=document.getElementById("cvGrid"),ctx=null;
+  var mode="cart", res=3, showPts=true;
+  var RES={1:{sq:1.2,nr:14,nth:48},2:{sq:0.8,nr:22,nth:72},3:{sq:0.6,nr:30,nth:110},
+           4:{sq:0.4,nr:44,nth:160},5:{sq:0.3,nr:60,nth:240}};
+  var NAMES={1:"coarse",2:"—",3:"medium",4:"—",5:"fine"};
+
+  function draw(){
+    if(!ctx)return;
+    clearBg(ctx,cv);
+    var s=Math.min(cv.width,cv.height)/(RAD*2.15),cx=cv.width/2,cy=cv.height/2;
+    var cfg=RES[res], counts={}, maxc=1;
+    for(var i=0;i<BEV.length;i++){
+      var X=BEV[i][0],Y=BEV[i][1],key;
+      if(mode==="cart"){
+        key=Math.floor(X/cfg.sq)+","+Math.floor(Y/cfg.sq);
+      }else{
+        var rr=Math.sqrt(X*X+Y*Y), th=Math.atan2(Y,X);
+        if(rr>RAD) continue;
+        key=Math.min(cfg.nr-1,Math.floor(rr/RAD*cfg.nr))+","+
+            Math.min(cfg.nth-1,Math.floor((th+Math.PI)/(2*Math.PI)*cfg.nth));
+      }
+      counts[key]=(counts[key]||0)+1;
+      if(counts[key]>maxc)maxc=counts[key];
+    }
+    var acc=hex(cssv("--accent")),hot=hex(cssv("--hot")),dim=hex(cssv("--muted"));
+    function shade(n){
+      var t=Math.min(1,Math.log(1+n)/Math.log(1+40));
+      return "rgb("+Math.round(acc[0]+(hot[0]-acc[0])*t)+","+
+                    Math.round(acc[1]+(hot[1]-acc[1])*t)+","+
+                    Math.round(acc[2]+(hot[2]-acc[2])*t)+")";
+    }
+    var nc=0;
+    for(var key in counts){
+      nc++;
+      var p=key.split(","),a=+p[0],b=+p[1];
+      ctx.fillStyle=shade(counts[key]);
+      if(mode==="cart"){
+        var cw=cfg.sq*s;
+        ctx.fillRect(cx+a*cw,cy-(b+1)*cw,Math.max(cw-0.5,0.7),Math.max(cw-0.5,0.7));
+      }else{
+        var r0=a/cfg.nr*RAD*s, r1=(a+1)/cfg.nr*RAD*s;
+        var t0=b/cfg.nth*2*Math.PI-Math.PI, t1=(b+1)/cfg.nth*2*Math.PI-Math.PI;
+        ctx.beginPath();
+        ctx.arc(cx,cy,r1,-t1,-t0,true);
+        ctx.arc(cx,cy,r0,-t0,-t1,false);
+        ctx.closePath();ctx.fill();
+      }
+    }
+    if(showPts){
+      ctx.fillStyle="rgba(255,255,255,0.30)";
+      for(var j=0;j<BEV.length;j+=2) ctx.fillRect(cx+BEV[j][0]*s,cy-BEV[j][1]*s,1*DPR,1*DPR);
+    }
+    var arr=[];for(var k2 in counts)arr.push(counts[k2]);
+    arr.sort(function(a,b){return a-b;});
+    var med=arr[Math.floor(arr.length/2)]||0, p95=arr[Math.floor(arr.length*0.95)]||0;
+    document.getElementById("roGrid").innerHTML=
+      '<div><span class="k">grid</span><span class="v">'+(mode==="cart"?"cartesian":"cylindrical")+'</span></div>'+
+      '<div><span class="k">occupied cells</span><span class="v">'+nc.toLocaleString()+'</span></div>'+
+      '<div><span class="k">median / cell</span><span class="v cool">'+med+'</span></div>'+
+      '<div><span class="k">95th pct</span><span class="v'+(p95>med*4?' hot':' cool')+'">'+p95+'</span></div>'+
+      '<div><span class="k">busiest cell</span><span class="v hot">'+maxc+'</span></div>'+
+      '<p class="note">'+(mode==="cart"
+        ? "Cartesian: every cell the same size everywhere. Near the sensor they overflow, far away they sit almost empty — the colouring shows it directly."
+        : "Cylindrical: cells widen with range, so the load evens out. Compare the 95th percentile against cartesian at the same resolution.")+'</p>';
+  }
+  document.querySelectorAll("button.b.gt").forEach(function(b){
+    b.addEventListener("click",function(){
+      mode=b.dataset.g;
+      document.querySelectorAll("button.b.gt").forEach(function(o){o.setAttribute("aria-pressed",o===b?"true":"false");});
+      draw();
+    });
+  });
+  document.getElementById("gres").addEventListener("input",function(e){
+    res=+e.target.value;document.getElementById("gresv").textContent=NAMES[res];draw();
+  });
+  document.getElementById("gpts").addEventListener("click",function(){
+    showPts=!showPts;this.setAttribute("aria-pressed",showPts?"true":"false");draw();
+  });
+  window.addEventListener("resize",function(){ctx=fit(cv,0.78);draw();});
+  ctx=fit(cv,0.78);draw();
+
+  document.getElementById("cellTab").innerHTML=
+    '<thead><tr><th>Binning</th><th>Occupied cells</th><th>Median pts/cell</th>'+
+    '<th>95th percentile</th><th>Busiest cell</th></tr></thead><tbody>'+
+    '<tr><td><b>Cartesian '+(CS.sq*100).toFixed(0)+' cm</b></td><td class="n">'+CS.cart.cells.toLocaleString()+
+    '</td><td class="n">'+CS.cart.median+'</td><td class="n">'+CS.cart.p95+'</td><td class="n">'+CS.cart.max+'</td></tr>'+
+    '<tr style="background:var(--accent-soft)"><td><b>Polar '+CS.nr+' × '+CS.nth+'</b></td><td class="n">'+CS.polar.cells.toLocaleString()+
+    '</td><td class="n">'+CS.polar.median+'</td><td class="n">'+CS.polar.p95+'</td><td class="n">'+CS.polar.max+'</td></tr>'+
+    '</tbody>';
+})();
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){
+  window.dispatchEvent(new Event("resize"));});
+new MutationObserver(function(){window.dispatchEvent(new Event("resize"));})
+  .observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+})();
+</script>

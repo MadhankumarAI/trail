@@ -1,0 +1,530 @@
+<title>The Half Dimension</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Literata:opsz,wght@7..72,400;7..72,600&display=swap">
+
+<style>
+:root{
+  --ground:#F3F6F5; --surface:#FFFFFF; --surface-2:#E8EDEB;
+  --ink:#111A1B; --ink-2:#374749; --muted:#657678;
+  --line:#DBE3E1; --line-2:#C1CCC9;
+  --accent:#0F7C8A; --accent-soft:#DDF0F2; --accent-ink:#0A5A65;
+  --terrain:#2F7F4E; --terrain-soft:#DDEFE3;
+  --static:#B0710D; --static-soft:#F7EAD3;
+  --dynamic:#C1304F; --dynamic-soft:#FADFE5;
+  --unknown:#9AA8AA;
+  --shadow:0 1px 2px rgba(17,26,27,.05), 0 10px 28px -14px rgba(17,26,27,.22);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0B1214; --surface:#131C1E; --surface-2:#1A2528;
+    --ink:#E2EAE9; --ink-2:#AFBFBF; --muted:#7C8E90;
+    --line:#233130; --line-2:#334543;
+    --accent:#3BC6D6; --accent-soft:#0D2E33; --accent-ink:#6EDCE8;
+    --terrain:#4FBF7B; --terrain-soft:#0F2B1C;
+    --static:#E0A83E; --static-soft:#2E2311;
+    --dynamic:#F26B8A; --dynamic-soft:#33131C;
+    --unknown:#5E7072;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0B1214; --surface:#131C1E; --surface-2:#1A2528;
+  --ink:#E2EAE9; --ink-2:#AFBFBF; --muted:#7C8E90;
+  --line:#233130; --line-2:#334543;
+  --accent:#3BC6D6; --accent-soft:#0D2E33; --accent-ink:#6EDCE8;
+  --terrain:#4FBF7B; --terrain-soft:#0F2B1C;
+  --static:#E0A83E; --static-soft:#2E2311;
+  --dynamic:#F26B8A; --dynamic-soft:#33131C;
+  --unknown:#5E7072;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Literata",Georgia,serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:"Chivo","Helvetica Neue",Arial,sans-serif;margin:0;line-height:1.18;text-wrap:balance;letter-spacing:-.015em}
+.mono,code{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 26px}
+.prose{max-width:66ch}
+.prose p{margin:0 0 1em}.prose p:last-child{margin-bottom:0}
+a{color:var(--accent-ink);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+header{border-bottom:1px solid var(--line);background:var(--surface)}
+header .wrap{padding:48px 26px 40px}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);font-weight:500}
+h1{font-size:clamp(34px,5.4vw,54px);font-weight:700;margin:14px 0 0;letter-spacing:-.028em}
+.dek{max-width:58ch;margin-top:16px;font-size:19px;color:var(--ink-2)}
+
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+h2{font-size:clamp(23px,3vw,30px);font-weight:600;margin-bottom:16px}
+h3{font-size:19px;font-weight:600;margin:0 0 8px}
+.tag{font-family:"JetBrains Mono",monospace;font-size:11.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:10px}
+
+/* signature cards */
+.sig{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px;margin-top:26px}
+.sig>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;box-shadow:var(--shadow)}
+.sig .f{font-family:"JetBrains Mono",monospace;font-size:15px;font-weight:700;color:var(--accent-ink);margin-bottom:7px}
+.sig h4{font-size:14px;font-weight:600;letter-spacing:.02em;margin-bottom:5px}
+.sig p{margin:0;font-size:14.5px;line-height:1.5;color:var(--ink-2)}
+.sig .verdict{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;margin-top:10px;padding-top:9px;border-top:1px solid var(--line);color:var(--muted)}
+
+/* simulator */
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;margin-top:8px}
+.sim-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+  padding:13px 16px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+.modes{display:flex;flex-wrap:wrap;gap:5px}
+.modes button{
+  font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:500;letter-spacing:.04em;
+  padding:7px 11px;border-radius:6px;border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-2);cursor:pointer}
+.modes button:hover{border-color:var(--accent);color:var(--ink)}
+.modes button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:700}
+:root[data-theme="dark"] .modes button[aria-pressed="true"]{color:#0B1214}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .modes button[aria-pressed="true"]{color:#0B1214}}
+.beams{display:flex;align-items:center;gap:9px;font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--muted)}
+.beams select{font-family:"JetBrains Mono",monospace;font-size:11.5px;padding:5px 7px;
+  border:1px solid var(--line-2);border-radius:6px;background:var(--surface);color:var(--ink)}
+.stage{padding:6px 0 0;overflow-x:auto}
+svg#scene{display:block;width:100%;min-width:720px;height:auto}
+.readout{padding:16px 20px 18px;border-top:1px solid var(--line);background:var(--surface)}
+.readout h4{font-size:15px;margin-bottom:6px}
+.readout p{margin:0;font-size:15.5px;color:var(--ink-2);max-width:78ch;line-height:1.58}
+.readout .flag{color:var(--dynamic);font-weight:600;font-family:"Chivo",sans-serif}
+.readout .good{color:var(--terrain);font-weight:600;font-family:"Chivo",sans-serif}
+.simcap{font-size:13px;color:var(--muted);font-style:italic;margin-top:12px;max-width:70ch}
+
+.key{display:flex;flex-wrap:wrap;gap:16px;padding:11px 16px;border-top:1px solid var(--line);
+  font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink-2);background:var(--surface-2)}
+.key span{display:flex;align-items:center;gap:7px}
+.key i{width:12px;height:12px;border-radius:3px;display:block}
+
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);
+  border-radius:0 9px 9px 0;padding:16px 20px;font-size:15.5px;color:var(--ink-2);max-width:78ch}
+.note b{color:var(--ink);font-weight:600}
+.note.warn{border-left-color:var(--static)}
+
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:15px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-top:20px}
+th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-family:"Chivo",sans-serif;font-size:11.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:none}
+td.y{color:var(--terrain);font-weight:600}
+td.n{color:var(--dynamic);font-weight:600}
+
+ol.q{padding-left:0;list-style:none;counter-reset:q;display:flex;flex-direction:column;gap:0}
+ol.q li{counter-increment:q;display:grid;grid-template-columns:34px 1fr;gap:14px;
+  padding:15px 0;border-bottom:1px solid var(--line)}
+ol.q li:last-child{border-bottom:none}
+ol.q li::before{content:"Q" counter(q);font-family:"JetBrains Mono",monospace;font-size:12px;
+  color:var(--accent);font-weight:500;padding-top:4px}
+ol.q p{margin:0;font-size:16px}
+footer{padding:36px 0 56px;color:var(--muted);font-size:14px}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="kicker">Phase 1 · Foundations</div>
+    <h1>The Half Dimension</h1>
+    <p class="dek">What "2.5D" actually means, why it sits between a picture and a volume, and exactly which things it can no longer tell you. Drive the simulator below — everything here is something you can see happen.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <span class="tag">The mental model</span>
+    <h2>It's about what is a function of what</h2>
+    <div class="prose">
+      <p>Forget "dimensions" for a second. Every representation here is a <em>lookup</em>: you hand it a coordinate, it hands you back a value. The whole distinction between 2D, 2.5D and 3D is <b>what you're allowed to ask for, and how many answers come back.</b></p>
+      <p>Watch what happens to the answer count as you move across these four:</p>
+    </div>
+
+    <div class="sig">
+      <div>
+        <div class="f">I(u, v) → colour</div>
+        <h4>2D image</h4>
+        <p>Ask for a pixel, get a colour. No geometry at all — a photo of a wall and a photo of a photo of a wall are identical data.</p>
+        <div class="verdict">one answer · no depth</div>
+      </div>
+      <div>
+        <div class="f">D(u, v) → depth</div>
+        <h4>2.5D · depth map</h4>
+        <p>Ask for a pixel, get <em>how far away</em> that pixel is. Geometry arrives — but only the first surface each ray touches.</p>
+        <div class="verdict">one answer · per ray</div>
+      </div>
+      <div>
+        <div class="f">H(x, y) → height</div>
+        <h4>2.5D · elevation map</h4>
+        <p>Ask for a spot on the ground, get the height of the surface there. A heightfield, like terrain in a video game.</p>
+        <div class="verdict">one answer · per column</div>
+      </div>
+      <div style="border-color:var(--accent)">
+        <div class="f">O(x, y, z) → occupied?</div>
+        <h4>3D</h4>
+        <p>Ask about any point in <em>space</em>, get whether matter is there. Now a single ground position can have many answers stacked above it.</p>
+        <div class="verdict">many answers · per column</div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:26px">
+      <b>That is the entire idea.</b> 2.5D is 3D data forced to be a <em>single-valued function of a 2D domain</em>. The "0.5" is the one extra number you're allowed to store per cell. Everything 2.5D can't do follows mechanically from that constraint: any situation needing <b>two surfaces along the same axis</b> — a branch above a road, a bridge over a river, a tunnel, a table with floor beneath it — cannot be written down.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">See it happen</span>
+    <h2>One street, five ways of looking at it</h2>
+    <div class="prose" style="margin-bottom:22px">
+      <p>This is a side-on slice of a street — you're looking at the <span class="mono">x–z</span> plane, so height is up. A lidar sits on the vehicle roof at the left. Step through the modes left to right; each one is a further compression of the one before it.</p>
+    </div>
+
+    <div class="sim">
+      <div class="sim-bar">
+        <div class="modes" role="group" aria-label="Representation mode">
+          <button data-mode="truth"  aria-pressed="true">1 · ground truth</button>
+          <button data-mode="cloud"  aria-pressed="false">2 · point cloud</button>
+          <button data-mode="occ"    aria-pressed="false">3 · 2D occupancy</button>
+          <button data-mode="zmax"   aria-pressed="false">4 · 2.5D z_max</button>
+          <button data-mode="zmin"   aria-pressed="false">5 · 2.5D z_min</button>
+        </div>
+        <label class="beams">beams
+          <select id="beams">
+            <option value="16">16</option>
+            <option value="32">32</option>
+            <option value="64" selected>64</option>
+            <option value="128">128</option>
+          </select>
+        </label>
+      </div>
+      <div class="stage"><svg id="scene" viewBox="0 0 1000 330" role="img" aria-label="Side view of a street scene rendered in the selected representation"></svg></div>
+      <div class="key">
+        <span><i style="background:var(--terrain)"></i>terrain / ground</span>
+        <span><i style="background:var(--static)"></i>static obstacle</span>
+        <span><i style="background:var(--dynamic)"></i>dynamic object</span>
+        <span><i style="background:var(--unknown)"></i>unobserved</span>
+        <span><i style="background:var(--accent)"></i>sensor</span>
+      </div>
+      <div class="readout" id="readout"></div>
+    </div>
+    <p class="simcap">Vertical scale exaggerated ≈1.9× so that a 15 cm kerb is visible next to a 4 m pole. Returns are generated by real ray-casting from the sensor position, with beams spaced uniformly in angle — the same thing a spinning lidar does.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">What you should have noticed</span>
+    <h2>Four things the simulator just proved</h2>
+
+    <div class="prose" style="margin-bottom:24px">
+      <p><b>1 · Angular spacing means density collapses with range.</b> Drop the beam count to 16 and watch the far half of the street nearly vanish while the ground in front of the bumper stays solid. Beams are uniform in <em>angle</em>, not in distance — so at 3 m adjacent returns land centimetres apart, and at 35 m they land most of a metre apart. Nothing in this picture is a modelling choice; it's trigonometry. Remember this, because in a later phase it becomes the entire justification for the adaptive grid.</p>
+
+      <p><b>2 · No return does not mean empty.</b> In mode 3 the region behind the car is grey, not white. The sensor learned nothing there. A 2D occupancy grid that only has <span class="mono">free</span> and <span class="mono">occupied</span> is lying to you — it needs a third state, <span class="mono">unknown</span>, and treating unknown as free is how robots drive into things.</p>
+
+      <p><b>3 · 2D occupancy destroys exactly the hazards you care about.</b> The pothole reads as free floor. The kerb reads as free floor. And the overhanging branch — which you could comfortably drive under — reads as a solid wall across the road. All three failures come from the same cause: the height axis was thrown away, so "there is matter in this column" was all that survived.</p>
+
+      <p><b>4 · 2.5D fixes two of those three, and can't fix the third.</b> Modes 4 and 5 both recover the pothole and the kerb — real height, correctly signed. But look at what happens at the branch. <span class="mono">z_max</span> reports 3.8 m and the branch reads as a wall again. <span class="mono">z_min</span> reports 0 m and the branch disappears entirely, so a tall vehicle drives straight into it. There is no third option, because a single number per column cannot hold two surfaces. This is not an implementation flaw you can engineer around — it's the definition of 2.5D.</p>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Feature in the scene</th><th>2D occupancy</th><th>2.5D z_max</th><th>2.5D z_min</th><th>Full 3D</th></tr></thead>
+        <tbody>
+          <tr><td><b>Pothole</b> −35 cm</td><td class="n">free floor ✗</td><td class="y">−0.35 m ✓</td><td class="y">−0.35 m ✓</td><td class="y">✓</td></tr>
+          <tr><td><b>Kerb</b> +15 cm</td><td class="n">free floor ✗</td><td class="y">+0.15 m ✓</td><td class="y">+0.15 m ✓</td><td class="y">✓</td></tr>
+          <tr><td><b>Pole</b> thin, 4 m</td><td class="y">occupied ✓</td><td class="y">4.0 m ✓</td><td class="y">visible ✓</td><td class="y">✓</td></tr>
+          <tr><td><b>Overhanging branch</b></td><td class="n">wall ✗</td><td class="n">reads as wall ✗</td><td class="n">invisible ✗</td><td class="y">✓</td></tr>
+          <tr><td><b>Ground behind car</b></td><td class="n">unknown</td><td class="n">unknown</td><td class="n">unknown</td><td class="n">unknown</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn" style="margin-top:22px">
+      <b>The last row is the honest one.</b> Occlusion is not a weakness of 2.5D — full 3D can't recover it either. A single lidar from a single viewpoint fundamentally cannot see through a car. That's why perception systems accumulate over time and motion, not just over space. Keep that separate in your head from the 2.5D limitation, because they get conflated constantly.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">A distinction almost everyone blurs</span>
+    <h2>There are two different 2.5Ds</h2>
+    <div class="prose">
+      <p>Both are called 2.5D, both store one number per cell, and they are <em>not the same thing</em>. They differ in which axis got collapsed.</p>
+    </div>
+
+    <div class="sig" style="margin-top:22px">
+      <div style="border-left:3px solid var(--accent)">
+        <div class="f">view-centric</div>
+        <h4>Depth map / range image</h4>
+        <p>Domain is the sensor's own view — pixel row and column, or beam and azimuth. Single-valued <b>along each ray</b>. Collapses everything behind the first surface.</p>
+        <div class="verdict">loses: occluded geometry</div>
+      </div>
+      <div style="border-left:3px solid var(--terrain)">
+        <div class="f">world-centric</div>
+        <h4>Elevation map / heightfield</h4>
+        <p>Domain is the ground plane — a fixed <span class="mono">x, y</span> grid in the world. Single-valued <b>along gravity</b>. Collapses everything stacked vertically.</p>
+        <div class="verdict">loses: overhangs, bridges, tunnels</div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:24px">
+      <b>Why you specifically need to keep these apart.</b> Your problem statement asks for a <em>world-centric</em> 2.5D map as the output. But several of the fastest models you'll meet later work by converting the point cloud into a <em>view-centric</em> range image first. So a real pipeline can be 2.5D twice over, in two different senses, with a full 3D point cloud in between. If you only have one bucket labelled "2.5D" in your head, that architecture will be incomprehensible.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="tag">Before we move on</span>
+    <h2>Check yourself</h2>
+    <div class="prose" style="margin-bottom:8px"><p>Don't look anything up. If a question feels shaky, say so and we'll stay on Phase 1.</p></div>
+    <ol class="q">
+      <li><p>A drone maps a multi-storey car park. Is a 2.5D elevation map enough? Why or why not — and what specifically breaks?</p></li>
+      <li><p>Your elevation map stores <span class="mono">z_max</span> per cell. A cell reads 2.4 m. Name three physically different scenes that produce that identical reading.</p></li>
+      <li><p>Is a stereo camera's disparity map 2D, 2.5D, or 3D? Which of the two flavours above?</p></li>
+      <li><p>Why does a uniform 5 cm grid start wasting memory at long range — and what does that have to do with beams being spaced by angle?</p></li>
+      <li><p>You store both <span class="mono">z_min</span> and <span class="mono">z_max</span> per cell. Have you now got 3D? What can you represent that you couldn't before, and what still can't you represent?</p></li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Phase 1 of 16 · 3D Deep Learning Research Roadmap · SIH 2026 PS 26053.
+    Next up, Phase 2: what a point cloud actually <em>is</em> as a data object — and why that innocuous-looking file format causes every difficulty in the rest of the roadmap.
+  </div>
+</footer>
+
+<script>
+(function(){
+  var NS="http://www.w3.org/2000/svg";
+  var svg=document.getElementById("scene");
+  var readout=document.getElementById("readout");
+  var beamSel=document.getElementById("beams");
+  var mode="truth";
+
+  // ---- world: x metres right, z metres up ----
+  var SOLIDS=[
+    {id:"road_a", x0:0,   x1:7,    z0:-0.6, z1:0,     kind:"terrain"},
+    {id:"pothole",x0:7,   x1:8.6,  z0:-0.6, z1:-0.35, kind:"terrain"},
+    {id:"road_b", x0:8.6, x1:22,   z0:-0.6, z1:0,     kind:"terrain"},
+    {id:"path",   x0:22,  x1:42,   z0:-0.6, z1:0.15,  kind:"terrain"},
+    {id:"car",    x0:13,  x1:17,   z0:0,    z1:1.2,   kind:"dynamic"},
+    {id:"branch", x0:9,   x1:11.6, z0:3.2,  z1:3.8,   kind:"static"},
+    {id:"pole",   x0:26,  x1:26.4, z0:0.15, z1:4.0,   kind:"static"},
+    {id:"ped",    x0:30,  x1:30.6, z0:0.15, z1:1.9,   kind:"dynamic"},
+    {id:"wall",   x0:36,  x1:42,   z0:0.15, z1:3.5,   kind:"static"}
+  ];
+  var SENSOR={x:0.5,z:2.4};
+  var XMAX=42, ZLO=-1.0, ZHI=5.6, BASE=-0.6;
+  var PX=24, PW=960, PY=310, PH=290;
+  var sx=PW/XMAX, sz=PH/(ZHI-ZLO);
+
+  function X(x){return PX+x*sx}
+  function Y(z){return PY-(z-ZLO)*sz}
+
+  function el(n,a){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);return e}
+  function col(kind){return kind==="terrain"?"var(--terrain)":kind==="static"?"var(--static)":kind==="dynamic"?"var(--dynamic)":"var(--unknown)"}
+
+  // ---- ray casting ----
+  function cast(n){
+    var A0=-75*Math.PI/180, A1=8*Math.PI/180, hits=[];
+    for(var i=0;i<n;i++){
+      var a=A0+(A1-A0)*(n===1?0.5:i/(n-1));
+      var dx=Math.cos(a), dz=Math.sin(a), hit=null;
+      for(var t=0.4;t<50;t+=0.035){
+        var px=SENSOR.x+dx*t, pz=SENSOR.z+dz*t;
+        if(px>XMAX||pz>ZHI||pz<ZLO) break;
+        for(var s=0;s<SOLIDS.length;s++){
+          var o=SOLIDS[s];
+          if(px>=o.x0&&px<=o.x1&&pz>=o.z0&&pz<=o.z1){hit={x:px,z:pz,kind:o.kind,r:t,a:a};break}
+        }
+        if(hit) break;
+      }
+      hits.push(hit?hit:{miss:true,a:a});
+    }
+    return hits;
+  }
+
+  // ---- columns ----
+  var CW=0.5, NC=Math.round(XMAX/CW);
+  function columns(hits){
+    var c=[];
+    for(var i=0;i<NC;i++) c.push({i:i,x0:i*CW,x1:(i+1)*CW,pts:[]});
+    hits.forEach(function(h){
+      if(h.miss) return;
+      var k=Math.floor(h.x/CW);
+      if(k>=0&&k<NC) c[k].pts.push(h);
+    });
+    c.forEach(function(q){
+      if(!q.pts.length){q.state="unknown";return}
+      var mx=-99,mn=99,kx=null,kn=null;
+      q.pts.forEach(function(p){
+        if(p.z>mx){mx=p.z;kx=p.kind}
+        if(p.z<mn){mn=p.z;kn=p.kind}
+      });
+      q.zmax=mx; q.zmin=mn; q.kmax=kx; q.kmin=kn;
+      q.state = mx>0.25 ? "occupied" : "free";
+    });
+    return c;
+  }
+
+  // ---- annotations ----
+  var NOTES={
+    truth:[
+      {x:10.3,z:4.35,t:"overhanging branch — open road beneath it",ax:10.3,az:3.85},
+      {x:7.8,z:-1.0,t:"pothole  −35 cm",ax:7.8,az:-0.38,below:true},
+      {x:23.2,z:1.15,t:"kerb  +15 cm",ax:22.4,az:0.2}
+    ],
+    cloud:[
+      {x:3.2,z:1.6,t:"returns almost touching",ax:3.2,az:0.05},
+      {x:33,z:2.6,t:"returns nearly a metre apart",ax:33,az:0.25},
+      {x:19.5,z:-1.0,t:"shadow — no returns at all",ax:19.5,az:-0.55,below:true}
+    ],
+    occ:[
+      {x:10.3,z:4.35,t:"branch → BLOCKED, but you can drive under",ax:10.3,az:3.85},
+      {x:7.8,z:1.5,t:"pothole → reads as free floor",ax:7.9,az:0.1},
+      {x:22.6,z:2.4,t:"kerb → also reads as free floor",ax:22.4,az:0.2}
+    ],
+    zmax:[
+      {x:10.3,z:4.6,t:"column reports 3.8 m — a wall, again",ax:10.3,az:3.85},
+      {x:7.8,z:1.5,t:"pothole recovered ✓",ax:7.9,az:-0.3},
+      {x:22.9,z:2.4,t:"kerb recovered ✓",ax:22.4,az:0.2}
+    ],
+    zmin:[
+      {x:10.3,z:4.6,t:"branch has vanished — a truck hits it",ax:10.3,az:3.5},
+      {x:7.8,z:1.5,t:"pothole recovered ✓",ax:7.9,az:-0.3},
+      {x:15,z:2.9,t:"car top, not road: lidar can't see beneath",ax:15,az:1.25}
+    ]
+  };
+
+  var TEXT={
+    truth:{h:"The world as it actually is",p:"Nine solid bodies in a vertical slice of street. Note the three things chosen deliberately: a <b>pothole</b> below the road plane, a <b>kerb</b> 15 cm above it, and a <b>branch</b> floating with clear road underneath. Every representation that follows is judged on these three."},
+    cloud:{h:"What the sensor actually delivers",p:"Not surfaces — <b>dots</b>. Each beam travels until it hits something and reports one point. Two things to see: returns crowd together near the sensor and spread apart with range, purely because beams are spaced by <em>angle</em>; and the region behind the car has <span class='flag'>no dots at all</span>. Change the beam count and watch the far field thin out."},
+    occ:{h:"Height thrown away — one bit per column",p:"Each column collapses to occupied / free / unobserved. The pole, car, pedestrian and wall survive correctly. But the <span class='flag'>pothole and kerb both read as clean floor</span>, and the <span class='flag'>branch reads as a wall across an open road</span>. All three failures share one cause: the z axis is gone."},
+    zmax:{h:"Tallest surface per column",p:"Height is back, and it earns its keep immediately — <span class='good'>the pothole dips and the kerb steps up</span>, both correctly signed. But taking the <em>maximum</em> means the branch column reports 3.8 m and <span class='flag'>the branch reads as a wall all over again</span>. Better than 2D. Still wrong here."},
+    zmin:{h:"Lowest surface per column",p:"Swap max for min and the branch problem inverts: the road beneath is reported, which is correct for driving — but <span class='flag'>the branch is now completely invisible</span>. Also look under the car: the lowest return is the car's roof, because no beam ever reached the tarmac. <b>One number per column cannot hold two surfaces. That sentence is the whole of Phase 1.</b>"}
+  };
+
+  function annotate(g,list){
+    (list||[]).forEach(function(n){
+      g.appendChild(el("line",{x1:X(n.x),y1:Y(n.z),x2:X(n.ax),y2:Y(n.az),
+        stroke:"var(--muted)","stroke-width":.8,"stroke-dasharray":"2 2"}));
+      g.appendChild(el("circle",{cx:X(n.ax),cy:Y(n.az),r:2,fill:"var(--muted)"}));
+      var tx=el("text",{x:X(n.x),y:Y(n.z)+(n.below?9:-4),"text-anchor":"middle",
+        fill:"var(--ink-2)","font-size":"11.5","font-family":"JetBrains Mono, monospace"});
+      tx.textContent=n.t; g.appendChild(tx);
+    });
+  }
+
+  function render(){
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+    var g=el("g",{});
+    var hits=cast(parseInt(beamSel.value,10));
+    var cols=columns(hits);
+
+    // baseline
+    g.appendChild(el("line",{x1:X(0),y1:Y(BASE),x2:X(XMAX),y2:Y(BASE),
+      stroke:"var(--line-2)","stroke-width":1}));
+
+    var ghost = mode!=="truth";
+    if(ghost){
+      SOLIDS.forEach(function(o){
+        g.appendChild(el("rect",{x:X(o.x0),y:Y(o.z1),width:(o.x1-o.x0)*sx,height:(o.z1-o.z0)*sz,
+          fill:"none",stroke:"var(--line-2)","stroke-width":.9,"stroke-dasharray":"3 3",rx:1}));
+      });
+    }
+
+    if(mode==="truth"){
+      SOLIDS.forEach(function(o){
+        g.appendChild(el("rect",{x:X(o.x0),y:Y(o.z1),width:(o.x1-o.x0)*sx,height:(o.z1-o.z0)*sz,
+          fill:col(o.kind),opacity:.82,rx:1.5}));
+      });
+    }
+
+    if(mode==="cloud"){
+      hits.forEach(function(h){
+        if(h.miss) return;
+        g.appendChild(el("circle",{cx:X(h.x),cy:Y(h.z),r:2.3,fill:col(h.kind)}));
+      });
+      // a few sample rays
+      hits.forEach(function(h,i){
+        if(h.miss||i%9) return;
+        g.appendChild(el("line",{x1:X(SENSOR.x),y1:Y(SENSOR.z),x2:X(h.x),y2:Y(h.z),
+          stroke:"var(--accent)","stroke-width":.5,opacity:.28}));
+      });
+    }
+
+    if(mode==="occ"){
+      var y0=Y(BASE), hgt=26;
+      cols.forEach(function(q){
+        var f = q.state==="occupied" ? "var(--ink)" : q.state==="free" ? "var(--surface-2)" : "var(--unknown)";
+        var op = q.state==="unknown" ? .45 : 1;
+        g.appendChild(el("rect",{x:X(q.x0),y:y0+6,width:CW*sx-1,height:hgt,fill:f,opacity:op}));
+      });
+      var lb=el("text",{x:X(0),y:y0+6+hgt+14,fill:"var(--muted)","font-size":"11",
+        "font-family":"JetBrains Mono, monospace"});
+      lb.textContent="one bit per column  ·  dark = occupied   pale = free   grey = unobserved";
+      g.appendChild(lb);
+    }
+
+    if(mode==="zmax"||mode==="zmin"){
+      cols.forEach(function(q){
+        if(q.state==="unknown"){
+          g.appendChild(el("rect",{x:X(q.x0),y:Y(BASE)-4,width:CW*sx-1,height:4,
+            fill:"var(--unknown)",opacity:.5}));
+          return;
+        }
+        var v = mode==="zmax"?q.zmax:q.zmin;
+        var k = mode==="zmax"?q.kmax:q.kmin;
+        var top=Math.max(v,BASE), bot=Math.min(v,BASE);
+        var h=Math.max((top-bot)*sz,1.5);
+        g.appendChild(el("rect",{x:X(q.x0),y:Y(top),width:CW*sx-1,height:h,
+          fill:col(k),opacity:.85,rx:1}));
+      });
+    }
+
+    // sensor
+    g.appendChild(el("circle",{cx:X(SENSOR.x),cy:Y(SENSOR.z),r:5,fill:"var(--accent)"}));
+    g.appendChild(el("circle",{cx:X(SENSOR.x),cy:Y(SENSOR.z),r:9,fill:"none",
+      stroke:"var(--accent)","stroke-width":1,opacity:.45}));
+    var st=el("text",{x:X(SENSOR.x)+13,y:Y(SENSOR.z)-8,fill:"var(--accent-ink)","font-size":"11",
+      "font-family":"JetBrains Mono, monospace"});
+    st.textContent="lidar @ 2.4 m"; g.appendChild(st);
+
+    annotate(g,NOTES[mode]);
+
+    // ruler
+    for(var m=0;m<=40;m+=10){
+      g.appendChild(el("line",{x1:X(m),y1:Y(ZLO)+4,x2:X(m),y2:Y(ZLO)+9,
+        stroke:"var(--line-2)","stroke-width":1}));
+      var t=el("text",{x:X(m),y:Y(ZLO)+21,"text-anchor":"middle",fill:"var(--muted)",
+        "font-size":"10.5","font-family":"JetBrains Mono, monospace"});
+      t.textContent=m+" m"; g.appendChild(t);
+    }
+
+    svg.appendChild(g);
+    readout.innerHTML="<h4>"+TEXT[mode].h+"</h4><p>"+TEXT[mode].p+"</p>";
+  }
+
+  document.querySelectorAll(".modes button").forEach(function(b){
+    b.addEventListener("click",function(){
+      mode=b.dataset.mode;
+      document.querySelectorAll(".modes button").forEach(function(o){
+        o.setAttribute("aria-pressed", o===b ? "true":"false");
+      });
+      render();
+    });
+  });
+  beamSel.addEventListener("change",render);
+  render();
+})();
+</script>

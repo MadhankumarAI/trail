@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive PCA on Point Clouds</title>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #f8fafc;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 400px;
+            background-color: var(--panel-bg);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        #main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #plot-container {
+            flex-grow: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin: 0 0 10px 0;
+            color: #94a3b8;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+        }
+
+        select {
+            padding: 8px;
+            background-color: #334155;
+            color: white;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        .info-panel {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--accent-color);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .comparison-panel {
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .comparison-panel h3 {
+            margin-top: 0;
+            color: #f472b6;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 6px;
+            border-bottom: 1px solid #334155;
+        }
+
+        th {
+            color: #cbd5e1;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            color: var(--accent-color);
+            display: none;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 20px 40px;
+            border-radius: 8px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>PCA Point Cloud Vis</h1>
+        
+        <div class="control-group">
+            <label for="shape-select">Shape Generator</label>
+            <select id="shape-select">
+                <option value="ellipsoid">Ellipsoid (Clear Axes)</option>
+                <option value="plane">2D Plane in 3D Space</option>
+                <option value="random">Random Cluster</option>
+                <option value="real_kitti">Real LiDAR Data (KITTI)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="points-slider">Number of Points: <span id="points-val">1500</span></label>
+            <input type="range" id="points-slider" min="100" max="5000" step="100" value="1500">
+        </div>
+
+        <div class="control-group">
+            <label for="noise-slider">Noise Level: <span id="noise-val">0.5</span></label>
+            <input type="range" id="noise-slider" min="0" max="3" step="0.1" value="0.5">
+        </div>
+
+        <div class="control-group" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155;">
+            <label for="action-select" style="color: #60a5fa;">Post-PCA Action</label>
+            <select id="action-select" style="border-color: #60a5fa;">
+                <option value="raw">1. Show Raw + Axes</option>
+                <option value="align">2. Align (Canonicalize)</option>
+                <option value="project">3. Project to 2D</option>
+                <option value="bbox">4. Oriented Bounding Box</option>
+            </select>
+        </div>
+
+        <div class="info-panel">
+            <strong>What is PCA?</strong><br>
+            Principal Component Analysis finds the directions of maximum variance in the point cloud.
+            <ul>
+                <li><span style="color:red">Red Vector (PC1)</span>: Direction of most spread.</li>
+                <li><span style="color:green">Green Vector (PC2)</span>: 2nd most spread, orthogonal to PC1.</li>
+                <li><span style="color:blue">Blue Vector (PC3)</span>: 3rd most spread, orthogonal to both.</li>
+            </ul>
+            <hr style="border-color: #3b82f6; opacity: 0.3; margin: 10px 0;">
+            <strong>After finding the 3 vectors, we use them for:</strong><br>
+            <ol style="padding-left: 20px; margin-top: 4px; margin-bottom: 0;">
+                <li><strong>Dimensionality Reduction:</strong> Discarding the smallest vector (PC3) and projecting 3D points onto the 2D plane (PC1 & PC2) to compress data.</li>
+                <li><strong>Alignment (Canonicalization):</strong> Multiplying the points by the eigenvectors rotates the cloud to a standard orientation, standardizing inputs before neural networks (PointNet).</li>
+                <li><strong>Bounding Boxes:</strong> The vectors define the optimal orientation for a tight 3D Oriented Bounding Box (OBB) around objects like cars.</li>
+                <li><strong>Geometric Features:</strong> The relative sizes of eigenvalues reveal if a local point cluster is linear (a wire), planar (a wall), or spherical (a bush).</li>
+            </ol>
+        </div>
+
+        <div class="comparison-panel">
+            <h3>PCA vs PointNet</h3>
+            <table>
+                <tr>
+                    <th>Feature</th>
+                    <th>PCA</th>
+                    <th>PointNet</th>
+                </tr>
+                <tr>
+                    <td><strong>Type</strong></td>
+                    <td>Statistical/Linear</td>
+                    <td>Deep Learning</td>
+                </tr>
+                <tr>
+                    <td><strong>Computation</strong></td>
+                    <td>Fast, CPU-based</td>
+                    <td>Heavy, needs GPU</td>
+                </tr>
+                <tr>
+                    <td><strong>Use Case</strong></td>
+                    <td>Alignment, Normals</td>
+                    <td>Classification, Seg.</td>
+                </tr>
+                <tr>
+                    <td><strong>Features</strong></td>
+                    <td>Global axes</td>
+                    <td>Local & Global learned features</td>
+                </tr>
+            </table>
+            <p style="margin-bottom: 0; color: #94a3b8; font-size: 0.8rem;">
+                <em>Intuition:</em> PCA mathematically finds the bounding box/axes of the whole cloud. PointNet processes each point independently using MLPs, then aggregates them (Max Pooling) to "understand" complex, non-linear shapes (like a chair vs. a table) that PCA would just see as similar blobs of variance.
+            </p>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div id="loading">Computing PCA...</div>
+        <div id="plot-container"></div>
+    </div>
+
+    <script>
+        const shapeSelect = document.getElementById('shape-select');
+        const pointsSlider = document.getElementById('points-slider');
+        const noiseSlider = document.getElementById('noise-slider');
+        const actionSelect = document.getElementById('action-select');
+        const pointsVal = document.getElementById('points-val');
+        const noiseVal = document.getElementById('noise-val');
+        const loading = document.getElementById('loading');
+
+        let isFetching = false;
+        let lastData = null;
+
+        async function fetchAndPlot() {
+            if (isFetching) return;
+            isFetching = true;
+            loading.style.display = 'block';
+
+            const shape = shapeSelect.value;
+            const nPoints = pointsSlider.value;
+            const noise = noiseSlider.value;
+
+            try {
+                const response = await fetch(`/api/pca?shape=${shape}&n_points=${nPoints}&noise=${noise}`);
+                const data = await response.json();
+                lastData = data;
+                renderPlot(data);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+            } finally {
+                loading.style.display = 'none';
+                isFetching = false;
+            }
+        }
+
+        function renderPlot(data) {
+            const action = actionSelect.value;
+            const points = data.points;
+            const pca = data.pca;
+            
+            // Helper functions for 3D math
+            const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+            const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+            const add = (a, b) => [a[0]+b[0], a[1]+b[1], a[2]+b[2]];
+
+            let P = [];
+            for(let i=0; i<points.x.length; i++) {
+                P.push([points.x[i], points.y[i], points.z[i]]);
+            }
+            const C = pca.center;
+            const V = pca.components; // 3x3 matrix. V[0] is PC1, V[1] is PC2, V[2] is PC3
+
+            // Aligned points: P_aligned = (P - C) * V^T
+            let P_aligned = P.map(p => {
+                let diff = sub(p, C);
+                return [dot(diff, V[0]), dot(diff, V[1]), dot(diff, V[2])];
+            });
+
+            let finalX = [], finalY = [], finalZ = [];
+            let dataTraces = [];
+
+            if (action === 'raw' || action === 'bbox') {
+                finalX = points.x; finalY = points.y; finalZ = points.z;
+            } else if (action === 'align') {
+                finalX = P_aligned.map(p => p[0]);
+                finalY = P_aligned.map(p => p[1]);
+                finalZ = P_aligned.map(p => p[2]);
+            } else if (action === 'project') {
+                // Project onto PC1 and PC2 (zero out PC3 in aligned space, transform back to orig space for context)
+                for(let i=0; i<P_aligned.length; i++) {
+                    let pa = P_aligned[i];
+                    let proj = [
+                        C[0] + pa[0]*V[0][0] + pa[1]*V[1][0],
+                        C[1] + pa[0]*V[0][1] + pa[1]*V[1][1],
+                        C[2] + pa[0]*V[0][2] + pa[1]*V[1][2]
+                    ];
+                    finalX.push(proj[0]); finalY.push(proj[1]); finalZ.push(proj[2]);
+                }
+            }
+
+            const pointCloudTrace = {
+                x: finalX,
+                y: finalY,
+                z: finalZ,
+                mode: 'markers',
+                marker: { size: 2, color: '#94a3b8', opacity: 0.7 },
+                type: 'scatter3d',
+                name: 'Point Cloud'
+            };
+            dataTraces.push(pointCloudTrace);
+
+            const colors = ['red', 'green', 'blue'];
+            const names = ['PC1 (Max Variance)', 'PC2', 'PC3'];
+
+            let drawAxesCenter = C;
+            let drawAxesV = V;
+            if (action === 'align') {
+                drawAxesCenter = [0, 0, 0];
+                drawAxesV = [[1,0,0], [0,1,0], [0,0,1]];
+            }
+
+            if (action !== 'bbox') {
+                for (let i = 0; i < 3; i++) {
+                    if (action === 'project' && i === 2) continue; // Hide PC3 if projected
+                    const comp = drawAxesV[i];
+                    const scale = Math.sqrt(pca.explained_variance[i]) * 1.5; 
+                    
+                    const vectorTrace = {
+                        x: [drawAxesCenter[0], drawAxesCenter[0] + comp[0] * scale],
+                        y: [drawAxesCenter[1], drawAxesCenter[1] + comp[1] * scale],
+                        z: [drawAxesCenter[2], drawAxesCenter[2] + comp[2] * scale],
+                        mode: 'lines',
+                        line: { color: colors[i], width: 8 },
+                        type: 'scatter3d',
+                        name: names[i]
+                    };
+                    dataTraces.push(vectorTrace);
+                }
+            }
+
+            if (action === 'bbox') {
+                // Min/Max in aligned space
+                let minA = [Infinity, Infinity, Infinity];
+                let maxA = [-Infinity, -Infinity, -Infinity];
+                for(let i=0; i<P_aligned.length; i++) {
+                    for(let j=0; j<3; j++) {
+                        if(P_aligned[i][j] < minA[j]) minA[j] = P_aligned[i][j];
+                        if(P_aligned[i][j] > maxA[j]) maxA[j] = P_aligned[i][j];
+                    }
+                }
+                
+                // 8 Corners of the bounding box
+                const cA = [
+                    [minA[0], minA[1], minA[2]], [maxA[0], minA[1], minA[2]],
+                    [maxA[0], maxA[1], minA[2]], [minA[0], maxA[1], minA[2]],
+                    [minA[0], minA[1], maxA[2]], [maxA[0], minA[1], maxA[2]],
+                    [maxA[0], maxA[1], maxA[2]], [minA[0], maxA[1], maxA[2]]
+                ];
+                
+                // Transform corners back to original space
+                const cO = cA.map(pa => [
+                    C[0] + pa[0]*V[0][0] + pa[1]*V[1][0] + pa[2]*V[2][0],
+                    C[1] + pa[0]*V[0][1] + pa[1]*V[1][1] + pa[2]*V[2][1],
+                    C[2] + pa[0]*V[0][2] + pa[1]*V[1][2] + pa[2]*V[2][2]
+                ]);
+                
+                // Edges (indices connecting the 8 corners)
+                const edges = [
+                    [0,1], [1,2], [2,3], [3,0], // bottom
+                    [4,5], [5,6], [6,7], [7,4], // top
+                    [0,4], [1,5], [2,6], [3,7]  // pillars
+                ];
+                
+                for(let edge of edges) {
+                    dataTraces.push({
+                        x: [cO[edge[0]][0], cO[edge[1]][0]],
+                        y: [cO[edge[0]][1], cO[edge[1]][1]],
+                        z: [cO[edge[0]][2], cO[edge[1]][2]],
+                        mode: 'lines',
+                        line: { color: '#f472b6', width: 4 },
+                        type: 'scatter3d',
+                        showlegend: false
+                    });
+                }
+            }
+
+            const layout = {
+                margin: { l: 0, r: 0, b: 0, t: 0 },
+                paper_bgcolor: '#0f172a',
+                scene: {
+                    aspectmode: 'data',
+                    xaxis: { showbackground: false, gridcolor: '#334155', zerolinecolor: '#475569' },
+                    yaxis: { showbackground: false, gridcolor: '#334155', zerolinecolor: '#475569' },
+                    zaxis: { showbackground: false, gridcolor: '#334155', zerolinecolor: '#475569' },
+                    camera: { eye: { x: 1.5, y: 1.5, z: 1.5 } }
+                },
+                legend: {
+                    font: { color: '#f8fafc' },
+                    bgcolor: 'rgba(0,0,0,0)',
+                    yanchor: 'top', y: 0.99, xanchor: 'left', x: 0.01
+                }
+            };
+
+            Plotly.react('plot-container', dataTraces, layout, {responsive: true});
+        }
+
+        // Event Listeners
+        shapeSelect.addEventListener('change', fetchAndPlot);
+        
+        pointsSlider.addEventListener('input', (e) => {
+            pointsVal.innerText = e.target.value;
+        });
+        pointsSlider.addEventListener('change', fetchAndPlot);
+
+        noiseSlider.addEventListener('input', (e) => {
+            noiseVal.innerText = e.target.value;
+        });
+        noiseSlider.addEventListener('change', fetchAndPlot);
+
+        actionSelect.addEventListener('change', () => {
+            if (lastData) renderPlot(lastData);
+        });
+
+        // Initial fetch
+        fetchAndPlot();
+    </script>
+</body>
+</html>
