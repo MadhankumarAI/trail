@@ -12,6 +12,7 @@ then run it slowly in software, so the dtype is chosen from the capability.
 """
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Optional
@@ -83,7 +84,10 @@ class Config:
             self.amp_dtype = "bfloat16"
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
-            self.compile = True
+            # TorchDynamo, which backs torch.compile, has no Python 3.13
+            # support: torch.compile() raises outright rather than degrading.
+            # Capability alone is not enough to decide this.
+            self.compile = sys.version_info < (3, 13)
         else:                                       # Turing and earlier
             self.amp_dtype = "float16"
             self.compile = False

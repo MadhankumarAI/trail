@@ -112,7 +112,14 @@ def train(cfg: Config) -> dict:
     model = build(cfg).to(cfg.device)
     print(f"model params {model.n_params()/1e6:.2f}M")
     if cfg.compile:
-        model = torch.compile(model)
+        # Belt and braces: config.py already gates this on the Python version,
+        # but a compile failure should degrade to eager, never abort a run that
+        # is otherwise fine.
+        try:
+            model = torch.compile(model)
+            print("  torch.compile enabled")
+        except Exception as e:
+            print(f"  torch.compile unavailable, running eager: {e}")
 
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr,
                             weight_decay=cfg.weight_decay)
@@ -186,11 +193,15 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=None)
     ap.add_argument("--batch-size", type=int, default=None)
     ap.add_argument("--num-workers", type=int, default=None)
+    ap.add_argument("--no-compile", action="store_true",
+                    help="disable torch.compile even where it is supported")
     a = ap.parse_args()
     cfg = Config.load(a.config, canon=a.canon, epochs=a.epochs, lr=a.lr,
                       num_workers=a.num_workers)
     if a.batch_size:
         cfg.batch_size = a.batch_size
+    if a.no_compile:
+        cfg.compile = False
     train(cfg)
 
 
