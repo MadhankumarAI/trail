@@ -426,3 +426,60 @@ frames: 100%|██████████████████████�
   Pedestrian and Cyclist at 0.5, matching the official benchmark.
   These are end-to-end numbers: an object lost by clustering counts
   as a miss here, unlike the training F1.
+
+
+
+
+
+loaded /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw/best.pt   canon=pca2_yaw
+evaluating on 400 validation frames
+
+frames: 100%|███████████████████████████████| 400/400 [00:23<00:00, 16.79it/s]
+
+==========================================================================
+  1. CLUSTER RECALL  -- the ceiling on everything below
+==========================================================================
+  class               easy    moderate        hard         all
+  ------------------------------------------------------------
+  Car                97.2%       85.7%       82.3%       85.4%
+  Pedestrian         73.3%       67.6%       61.8%       66.7%
+  Cyclist            88.9%       81.9%       82.4%       83.8%
+
+  Objects missed here never reach the network. No amount of
+  classifier accuracy recovers them.
+
+  by range:
+  class             0-20 m     20-40 m       40+ m
+  ------------------------------------------------
+  Car                95.3%       83.5%       27.7%
+  Pedestrian         74.6%       41.1%       27.3%
+  Cyclist            79.4%       88.4%       33.3%
+
+==========================================================================
+  2. 3D AP  -- end to end, KITTI protocol
+==========================================================================
+  class          IoU        easy (n)    moderate (n)        hard (n)
+  ------------------------------------------------------------------
+  Car            0.7     21.76 (287)     26.20 (845)    25.36 (1174)
+  Pedestrian     0.5     33.59 (105)     29.86 (145)     26.27 (173)
+  Cyclist        0.5      64.29 (45)      50.07 (72)      49.74 (74)
+
+==========================================================================
+  3. AP vs IoU THRESHOLD  -- is the loss detection, or box geometry?
+==========================================================================
+  A steep fall from 0.3 to 0.7 means objects ARE being found and
+  classified, but the predicted boxes are not tight enough. A flat
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                57.44       51.33       26.20
+  Pedestrian         57.22       29.86        1.29
+  Cyclist            64.07       50.07        6.09
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
