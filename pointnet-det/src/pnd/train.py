@@ -37,23 +37,32 @@ from .kitti import CLASSES
 from .model import build
 
 
-def box_loss(out, batch, fg):
-    """Corner loss plus binned heading, on foreground only.
+def box_loss(out, batch, fg, corner_w: float = 1.0):
+    """Direct centre/size/heading supervision, with corner loss as a REGULARISER.
 
-    The corner term is what ties this to the metric: it penalises centre, size
-    and heading through their joint geometric effect, scaled by the class anchor
-    diagonal so a pedestrian-ruining error costs more than the same error on a
-    car. The heading bin is trained with teacher forcing -- the corner loss uses
-    the ground-truth bin with the predicted residual, so gradient flows into the
-    residual without argmax blocking it.
+    An earlier version replaced the direct centre and size terms with corner loss
+    alone. That was a misreading of F-PointNet, where the loss is
+
+        L_centre-reg + L_size-cls/reg + L_heading-cls/reg + gamma * L_corner
+
+    -- corner loss is added ON TOP of the direct terms, not instead of them.
+    Dropping them left size supervised only weakly and entangled through the
+    corners, and dividing corner loss by the anchor diagonal further shrank the
+    gradient for the largest anchor. Measured cost: Car moderate AP fell
+    26.20 -> 19.11 while heading error improved 17.4 -> 6.4 degrees. Heading was
+    fixed; size and centre regressed further than heading gained.
+
+    Returns (centre, size, heading-bin, heading-residual, corner).
     """
     z = out["center"].sum() * 0.0
     if fg.sum() == 0:
-        return z, z, z
+        return z, z, z, z, z
 
-    hb_logit = out["head_bin"][fg]
+    l_ctr = F.smooth_l1_loss(out["center"][fg], batch["center"][fg])
+    l_size = F.smooth_l1_loss(out["size_log"][fg], batch["size_log"][fg])
+
     hb_gt = batch["head_bin"][fg]
-    l_bin = F.cross_entropy(hb_logit, hb_gt)
+    l_bin = F.cross_entropy(out["head_bin"][fg], hb_gt)
     res_at_gt = out["head_res"][fg].gather(1, hb_gt.unsqueeze(1)).squeeze(1)
     l_res = F.smooth_l1_loss(res_at_gt, batch["head_res"][fg])
 
@@ -62,11 +71,11 @@ def box_loss(out, batch, fg):
     dims_pred = torch.exp(out["size_log"][fg].clamp(-2.0, 2.0)) * anchor
     yaw_pred = decode_heading(hb_gt.float(), res_at_gt)
     yaw_gt = decode_heading(hb_gt.float(), batch["head_res"][fg])
-
-    l_corner = corner_loss(out["center"][fg] * scale, dims_pred, yaw_pred,
-                           batch["center"][fg] * scale, batch["dims"][fg],
-                           yaw_gt, anchor_diagonal(anchor))
-    return l_corner, l_bin, l_res
+    l_corner = corner_w * corner_loss(
+        out["center"][fg] * scale, dims_pred, yaw_pred,
+        batch["center"][fg] * scale, batch["dims"][fg], yaw_gt,
+        anchor_diagonal(anchor))
+    return l_ctr, l_size, l_bin, l_res, l_corner
 
 
 @torch.no_grad()
@@ -74,6 +83,7 @@ def evaluate(model, loader, device, amp_dtype, num_classes):
     model.eval()
     conf = np.zeros((num_classes, num_classes), np.int64)
     ctr_err, yaw_err, n_fg = 0.0, 0.0, 0
+    per = {c: [0.0, 0.0, 0.0, 0] for c in range(1, num_classes)}  # ctr, size, yaw, n
     for b in loader:
         x = b["x"].to(device, non_blocking=True)
         y = b["cls"].to(device, non_blocking=True)
@@ -98,10 +108,25 @@ def evaluate(model, loader, device, amp_dtype, num_classes):
             d = torch.minimum(d, np.pi - d)
             yaw_err += torch.rad2deg(d).sum().item()
             n_fg += int(fg.sum())
-    return conf, (ctr_err / max(n_fg, 1)), (yaw_err / max(n_fg, 1))
+
+            # per-class breakdown: which term is actually costing IoU?
+            ce = ((out["center"][fg].float() - b["center"].to(device)[fg])
+                  .norm(dim=1) * sc)
+            dp = torch.exp(out["size_log"][fg].float().clamp(-2, 2))                 * b["anchor"].to(device)[fg]
+            se = (dp - b["dims"].to(device)[fg]).abs().mean(dim=1)
+            ye = torch.rad2deg(d)
+            yc = y[fg]
+            for c in per:
+                m = yc == c
+                if m.any():
+                    per[c][0] += ce[m].sum().item()
+                    per[c][1] += se[m].sum().item()
+                    per[c][2] += ye[m].sum().item()
+                    per[c][3] += int(m.sum())
+    return conf, (ctr_err / max(n_fg, 1)), (yaw_err / max(n_fg, 1)), per
 
 
-def report(conf, ctr_err, yaw_err) -> dict:
+def report(conf, ctr_err, yaw_err, per=None) -> dict:
     tp = np.diag(conf).astype(float)
     sup = conf.sum(1).astype(float)
     pred = conf.sum(0).astype(float)
@@ -118,9 +143,26 @@ def report(conf, ctr_err, yaw_err) -> dict:
     lines.append(f"  foreground recall {fg_rec:.3f}   "
                  f"mean F1 (fg) {f1[1:].mean():.3f}")
     lines.append(f"  centre err {ctr_err:.2f} m   heading err {yaw_err:.1f} deg")
+
+    # Per-class box error. Aggregate centre/heading numbers hid the fact that a
+    # 0.33 m centre error is 8% of a car's length but half a pedestrian's width,
+    # and that size was left effectively unsupervised when corner loss replaced
+    # the direct terms. Break it out so the binding term is visible.
+    box_err = {}
+    if per:
+        lines.append(f"  {'':<12}{'ctr m':>9}{'size m':>9}{'yaw deg':>9}")
+        for i, c in enumerate(CLASSES):
+            if i == 0 or i not in per or per[i][3] == 0:
+                continue
+            n = per[i][3]
+            box_err[c] = {"ctr": per[i][0] / n, "size": per[i][1] / n,
+                          "yaw": per[i][2] / n}
+            lines.append(f"  {c:<12}{per[i][0]/n:>9.2f}{per[i][1]/n:>9.2f}"
+                         f"{per[i][2]/n:>9.1f}")
+
     return {"text": "\n".join(lines), "fg_recall": float(fg_rec),
             "f1_fg": float(f1[1:].mean()), "ctr_err": float(ctr_err),
-            "yaw_err": float(yaw_err),
+            "yaw_err": float(yaw_err), "box_err": box_err,
             "per_class_f1": {c: float(f1[i]) for i, c in enumerate(CLASSES)}}
 
 
@@ -219,8 +261,10 @@ def train(cfg: Config) -> dict:
                 lcls = F.cross_entropy(out["logits"], y, weight=wt,
                                        label_smoothing=cfg.label_smoothing)
                 fg = y > 0
-                lcorner, lbin, lres = box_loss(out, b, fg)
-                loss = lcls + cfg.box_loss_w * (lcorner + 0.5 * lbin + lres)
+                lc, lsz, lbin, lres, lcorn = box_loss(out, b, fg,
+                                                      cfg.corner_loss_w)
+                loss = lcls + cfg.box_loss_w * (lc + lsz + 0.5 * lbin + lres
+                                                + lcorn)
 
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
@@ -233,14 +277,14 @@ def train(cfg: Config) -> dict:
             tot += float(loss.detach())
             nb += 1
 
-        conf, ce, ye = evaluate(model, vl, cfg.device, cfg.amp_dtype,
-                                cfg.num_classes)
-        rep = report(conf, ce, ye)
+        conf, ce, ye, per = evaluate(model, vl, cfg.device, cfg.amp_dtype,
+                                     cfg.num_classes)
+        rep = report(conf, ce, ye, per)
         rep["src"] = "raw"
         if ema is not None:
-            c2, ce2, ye2 = evaluate(ema, vl, cfg.device, cfg.amp_dtype,
-                                    cfg.num_classes)
-            r2 = report(c2, ce2, ye2)
+            c2, ce2, ye2, per2 = evaluate(ema, vl, cfg.device, cfg.amp_dtype,
+                                          cfg.num_classes)
+            r2 = report(c2, ce2, ye2, per2)
             if r2["f1_fg"] > rep["f1_fg"]:
                 r2["src"] = "ema"
                 rep = r2

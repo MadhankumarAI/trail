@@ -55,6 +55,7 @@ class Config:
     lr: float = 1e-3
     weight_decay: float = 1e-4
     box_loss_w: float = 1.0
+    corner_loss_w: float = 0.5   # regulariser weight, not a replacement
     seed: int = 0
     num_workers: int = 4
 
