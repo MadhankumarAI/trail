@@ -1,0 +1,351 @@
+[detached (from session train)]
+(venv) (base) user02@ubuntu-Standard-PC-Q35-ICH9-2009:~/Downloads/trail/pointnet-det$ tail -f runs/pca2_yaw.log
+canon=pca2_yaw  device=cuda (NVIDIA A100 80GB PCIe MIG 1c.7g.80gb)
+batch=512  amp=bfloat16  compile=False
+epochs=30  lr=0.001  points=256
+
+train 172,335 proposals   val 42,921
+class counts: {'Background': 151832, 'Car': 17511, 'Pedestrian': 2027, 'Cyclist': 965}
+bg:fg = 7.4 : 1
+class weights: [0.28, 2.46, 20.0, 20.0] 
+
+model params 0.81M
+epoch   1/30  loss 1.4229  31s
+  class         support    prec     rec      F1
+  Background     37,681   0.994   0.770   0.868
+  Car             4,450   0.545   0.947   0.692
+  Pedestrian        514   0.116   0.831   0.203
+  Cyclist           276   0.104   0.866   0.186
+  -------------------------------------------
+  foreground recall 0.931   mean F1 (fg) 0.360
+  centre err 0.71 m   heading err 42.0 deg
+  -> new best, saved
+
+epoch   2/30  loss 0.8490  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.995   0.819   0.898
+  Car             4,450   0.683   0.951   0.795
+  Pedestrian        514   0.099   0.959   0.180
+  Cyclist           276   0.275   0.728   0.399
+  -------------------------------------------
+  foreground recall 0.940   mean F1 (fg) 0.458
+  centre err 0.64 m   heading err 34.2 deg
+  -> new best, saved
+
+epoch   3/30  loss 0.6861  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.869   0.928
+  Car             4,450   0.714   0.964   0.820
+  Pedestrian        514   0.150   0.942   0.258
+  Cyclist           276   0.280   0.801   0.415
+  -------------------------------------------
+  foreground recall 0.953   mean F1 (fg) 0.498
+  centre err 0.64 m   heading err 39.6 deg
+  -> new best, saved
+
+epoch   4/30  loss 0.5999  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.993   0.949   0.971
+  Car             4,450   0.812   0.946   0.874
+  Pedestrian        514   0.383   0.897   0.537
+  Cyclist           276   0.430   0.804   0.561
+  -------------------------------------------
+  foreground recall 0.934   mean F1 (fg) 0.657
+  centre err 0.55 m   heading err 30.8 deg
+  -> new best, saved
+
+epoch   5/30  loss 0.5688  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.994   0.942   0.968
+  Car             4,450   0.770   0.964   0.856
+  Pedestrian        514   0.513   0.626   0.564
+  Cyclist           276   0.253   0.938   0.398
+  -------------------------------------------
+  foreground recall 0.929   mean F1 (fg) 0.606
+  centre err 0.66 m   heading err 31.6 deg
+
+epoch   6/30  loss 0.5494  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.994   0.938   0.965
+  Car             4,450   0.800   0.953   0.869
+  Pedestrian        514   0.333   0.858   0.480
+  Cyclist           276   0.333   0.899   0.486
+  -------------------------------------------
+  foreground recall 0.940   mean F1 (fg) 0.612
+  centre err 0.55 m   heading err 34.9 deg
+
+epoch   7/30  loss 0.5207  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.914   0.953
+  Car             4,450   0.718   0.976   0.827
+  Pedestrian        514   0.248   0.953   0.394
+  Cyclist           276   0.530   0.707   0.606
+  -------------------------------------------
+  foreground recall 0.960   mean F1 (fg) 0.609
+  centre err 0.58 m   heading err 33.3 deg
+
+epoch   8/30  loss 0.5045  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.998   0.857   0.922
+  Car             4,450   0.649   0.976   0.780
+  Pedestrian        514   0.197   0.918   0.325
+  Cyclist           276   0.179   0.938   0.300
+  -------------------------------------------
+  foreground recall 0.969   mean F1 (fg) 0.468
+  centre err 0.53 m   heading err 34.0 deg
+
+epoch   9/30  loss 0.4922  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.936   0.965
+  Car             4,450   0.764   0.971   0.855
+  Pedestrian        514   0.378   0.911   0.534
+  Cyclist           276   0.384   0.877   0.534
+  -------------------------------------------
+  foreground recall 0.960   mean F1 (fg) 0.641
+  centre err 0.51 m   heading err 29.2 deg
+
+epoch  10/30  loss 0.4556  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.995   0.945   0.969
+  Car             4,450   0.828   0.962   0.890
+  Pedestrian        514   0.310   0.961   0.469
+  Cyclist           276   0.576   0.837   0.682
+  -------------------------------------------
+  foreground recall 0.956   mean F1 (fg) 0.681
+  centre err 0.53 m   heading err 28.4 deg
+  -> new best, saved
+
+epoch  11/30  loss 0.4364  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.944   0.970
+  Car             4,450   0.779   0.975   0.866
+  Pedestrian        514   0.478   0.881   0.620
+  Cyclist           276   0.362   0.938   0.523
+  -------------------------------------------
+  foreground recall 0.964   mean F1 (fg) 0.670
+  centre err 0.47 m   heading err 28.5 deg
+
+epoch  12/30  loss 0.4351  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.887   0.939
+  Car             4,450   0.800   0.971   0.877
+  Pedestrian        514   0.167   0.936   0.284
+  Cyclist           276   0.226   0.920   0.363
+  -------------------------------------------
+  foreground recall 0.965   mean F1 (fg) 0.508
+  centre err 0.48 m   heading err 25.3 deg
+
+epoch  13/30  loss 0.4031  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.995   0.958   0.976
+  Car             4,450   0.839   0.968   0.899
+  Pedestrian        514   0.464   0.866   0.604
+  Cyclist           276   0.461   0.931   0.617
+  -------------------------------------------
+  foreground recall 0.956   mean F1 (fg) 0.707
+  centre err 0.46 m   heading err 24.9 deg
+  -> new best, saved
+
+epoch  14/30  loss 0.3729  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.995   0.961   0.978
+  Car             4,450   0.833   0.968   0.895
+  Pedestrian        514   0.530   0.907   0.669
+  Cyclist           276   0.508   0.902   0.650
+  -------------------------------------------
+  foreground recall 0.958   mean F1 (fg) 0.738
+  centre err 0.44 m   heading err 25.8 deg
+  -> new best, saved
+
+epoch  15/30  loss 0.3728  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.930   0.962
+  Car             4,450   0.798   0.971   0.876
+  Pedestrian        514   0.332   0.899   0.485
+  Cyclist           276   0.264   0.935   0.412
+  -------------------------------------------
+  foreground recall 0.962   mean F1 (fg) 0.591
+  centre err 0.45 m   heading err 25.9 deg
+
+epoch  16/30  loss 0.3511  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.949   0.972
+  Car             4,450   0.816   0.968   0.885
+  Pedestrian        514   0.436   0.889   0.585
+  Cyclist           276   0.389   0.942   0.551
+  -------------------------------------------
+  foreground recall 0.959   mean F1 (fg) 0.674
+  centre err 0.48 m   heading err 26.3 deg
+
+epoch  17/30  loss 0.3185  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.945   0.971
+  Car             4,450   0.755   0.984   0.854
+  Pedestrian        514   0.453   0.922   0.608
+  Cyclist           276   0.622   0.804   0.701
+  -------------------------------------------
+  foreground recall 0.969   mean F1 (fg) 0.721
+  centre err 0.44 m   heading err 23.7 deg
+
+epoch  18/30  loss 0.3118  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.955   0.975
+  Car             4,450   0.829   0.968   0.893
+  Pedestrian        514   0.424   0.914   0.579
+  Cyclist           276   0.507   0.888   0.646
+  -------------------------------------------
+  foreground recall 0.958   mean F1 (fg) 0.706
+  centre err 0.47 m   heading err 26.8 deg
+
+epoch  19/30  loss 0.3019  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.959   0.978
+  Car             4,450   0.839   0.973   0.901
+  Pedestrian        514   0.469   0.944   0.627
+  Cyclist           276   0.544   0.891   0.676
+  -------------------------------------------
+  foreground recall 0.966   mean F1 (fg) 0.735
+  centre err 0.40 m   heading err 22.3 deg
+
+epoch  20/30  loss 0.2622  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.959   0.978
+  Car             4,450   0.825   0.978   0.895
+  Pedestrian        514   0.493   0.947   0.648
+  Cyclist           276   0.615   0.884   0.725
+  -------------------------------------------
+  foreground recall 0.970   mean F1 (fg) 0.756
+  centre err 0.41 m   heading err 20.8 deg
+  -> new best, saved
+
+epoch  21/30  loss 0.2499  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.967   0.981
+  Car             4,450   0.858   0.972   0.911
+  Pedestrian        514   0.541   0.932   0.685
+  Cyclist           276   0.624   0.884   0.732
+  -------------------------------------------
+  foreground recall 0.963   mean F1 (fg) 0.776
+  centre err 0.39 m   heading err 20.5 deg
+  -> new best, saved
+
+epoch  22/30  loss 0.2361  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.967   0.981
+  Car             4,450   0.835   0.978   0.901
+  Pedestrian        514   0.616   0.911   0.735
+  Cyclist           276   0.609   0.873   0.717
+  -------------------------------------------
+  foreground recall 0.965   mean F1 (fg) 0.784
+  centre err 0.38 m   heading err 20.4 deg
+  -> new best, saved
+
+epoch  23/30  loss 0.2254  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.970   0.983
+  Car             4,450   0.863   0.970   0.914
+  Pedestrian        514   0.585   0.934   0.719
+  Cyclist           276   0.632   0.877   0.734
+  -------------------------------------------
+  foreground recall 0.962   mean F1 (fg) 0.789
+  centre err 0.37 m   heading err 19.6 deg
+  -> new best, saved
+
+epoch  24/30  loss 0.2030  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.997   0.967   0.981
+  Car             4,450   0.825   0.982   0.896
+  Pedestrian        514   0.656   0.916   0.765
+  Cyclist           276   0.681   0.859   0.760
+  -------------------------------------------
+  foreground recall 0.969   mean F1 (fg) 0.807
+  centre err 0.37 m   heading err 19.2 deg
+  -> new best, saved
+
+epoch  25/30  loss 0.1913  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.971   0.983
+  Car             4,450   0.854   0.973   0.909
+  Pedestrian        514   0.626   0.934   0.749
+  Cyclist           276   0.723   0.851   0.782
+  -------------------------------------------
+  foreground recall 0.962   mean F1 (fg) 0.814
+  centre err 0.36 m   heading err 19.2 deg
+  -> new best, saved
+
+epoch  26/30  loss 0.1824  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.968   0.982
+  Car             4,450   0.842   0.978   0.905
+  Pedestrian        514   0.610   0.914   0.732
+  Cyclist           276   0.645   0.888   0.747
+  -------------------------------------------
+  foreground recall 0.967   mean F1 (fg) 0.794
+  centre err 0.36 m   heading err 18.7 deg
+
+epoch  27/30  loss 0.1714  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.972   0.984
+  Car             4,450   0.858   0.975   0.913
+  Pedestrian        514   0.636   0.916   0.751
+  Cyclist           276   0.692   0.870   0.770
+  -------------------------------------------
+  foreground recall 0.964   mean F1 (fg) 0.811
+  centre err 0.36 m   heading err 18.4 deg
+
+epoch  28/30  loss 0.1661  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.972   0.984
+  Car             4,450   0.857   0.975   0.912
+  Pedestrian        514   0.651   0.916   0.761
+  Cyclist           276   0.685   0.859   0.762
+  -------------------------------------------
+  foreground recall 0.963   mean F1 (fg) 0.812
+  centre err 0.36 m   heading err 18.3 deg
+
+epoch  29/30  loss 0.1634  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.973   0.984
+  Car             4,450   0.862   0.973   0.915
+  Pedestrian        514   0.655   0.916   0.764
+  Cyclist           276   0.693   0.866   0.770
+  -------------------------------------------
+  foreground recall 0.962   mean F1 (fg) 0.816
+  centre err 0.36 m   heading err 18.2 deg
+  -> new best, saved
+
+epoch  30/30  loss 0.1614  17s
+  class         support    prec     rec      F1
+  Background     37,681   0.996   0.972   0.984
+  Car             4,450   0.858   0.975   0.913
+  Pedestrian        514   0.650   0.916   0.760
+  Cyclist           276   0.689   0.866   0.767
+  -------------------------------------------
+  foreground recall 0.963   mean F1 (fg) 0.813
+  centre err 0.36 m   heading err 18.2 deg
+
+best foreground F1 0.8161   -> /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw
+
+
+
+
+
+RUN 2:
+
+runs/none.log:best foreground F1 0.7278   -> /home/user02/Downloads/trail/pointnet-det/runs/none
+runs/pca2_yaw.log:best foreground F1 0.8161   -> /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw
+runs/pca3_skew.log:best foreground F1 0.7712   -> /home/user02/Downloads/trail/pointnet-det/runs/pca3_skew
+runs/pca4_ensemble.log:best foreground F1 0.7403   -> /home/user02/Downloads/trail/pointnet-det/runs/pca4_ensemble
+runs/tnet3.log:best foreground F1 0.7574   -> /home/user02/Downloads/trail/pointnet-det/runs/tnet3
+runs/none/history.json  runs/pca2_yaw/history.json  runs/pca3_skew/history.json  runs/pca4_ensemble/history.json  runs/tnet3/history.json
+
+
+
+RUN2 :
+canon             bestF1  @ep   final    Car    Ped    Cyc  fgRec  ctr_m   yaw  eps
+-----------------------------------------------------------------------------------
+pca2_yaw          0.8161   29  0.8135  0.915  0.764  0.770  0.962   0.36  18.2   30
+pca3_skew         0.7712   29  0.7706  0.898  0.697  0.719  0.949   0.48  54.3   30
+tnet3             0.7574   22  0.7308  0.897  0.650  0.725  0.962   0.47  26.2   30
+pca4_ensemble     0.7403   30  0.7403  0.893  0.649  0.680  0.969   0.81  47.3   30
+none              0.7278   25  0.7141  0.891  0.624  0.669  0.966   0.44  25.7   30
