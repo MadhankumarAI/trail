@@ -349,3 +349,80 @@ pca3_skew         0.7712   29  0.7706  0.898  0.697  0.719  0.949   0.48  54.3  
 tnet3             0.7574   22  0.7308  0.897  0.650  0.725  0.962   0.47  26.2   30
 pca4_ensemble     0.7403   30  0.7403  0.893  0.649  0.680  0.969   0.81  47.3   30
 none              0.7278   25  0.7141  0.891  0.624  0.669  0.966   0.44  25.7   30
+
+
+
+
+run3:
+
+best F1 0.8405 at epoch 73   final 0.8368
+
+  ep       F1    Car    Ped    Cyc    ctr    yaw
+   1   0.5109  0.786  0.303  0.444   0.72   42.1
+   6   0.6216  0.878  0.521  0.466   0.55   31.3
+  11   0.7078  0.910  0.510  0.704   0.51   31.0
+  16   0.8241  0.910  0.790  0.772   0.47   26.1
+  21   0.8177  0.915  0.776  0.762   0.41   23.8
+  26   0.8148  0.915  0.759  0.770   0.39   22.8
+  31   0.8256  0.916  0.792  0.769   0.38   22.2
+  36   0.8276  0.919  0.792  0.771   0.37   21.4
+  41   0.8254  0.920  0.791  0.765   0.36   20.3
+  46   0.8394  0.923  0.812  0.783   0.38   21.5
+  51   0.8278  0.923  0.800  0.760   0.34   19.3
+  56   0.8287  0.923  0.802  0.761   0.34   18.6
+  61   0.8343  0.925  0.808  0.770   0.33   18.1
+  66   0.8371  0.925  0.813  0.773   0.33   17.7
+  71   0.8337  0.925  0.810  0.767   0.33   17.6
+  76   0.8390  0.925  0.817  0.774   0.33   17.4
+  80   0.8368  0.925  0.812  0.773   0.33   17.4
+
+last 20 epochs: min 0.8332  max 0.8405  drift +0.0025
+
+
+
+	epoch 16	epoch 80	gain over 64 epochs
+F1	0.8241	0.8368	+0.013
+Car	0.910	0.925	+0.015
+Pedestrian	0.790	0.812	+0.022
+Cyclist	0.772	0.773	+0.001
+
+
+
+(base) user02@ubuntu-Standard-PC-Q35-ICH9-2009:~/Downloads/trail/pointnet-det$ .venv/bin/python -m pnd.evaluate --canon pca2_yaw --max-frames 200
+loaded /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw/best.pt   canon=pca2_yaw
+evaluating on 200 validation frames
+
+frames: 100%|███████████████████████████████| 200/200 [00:12<00:00, 15.52it/s]
+
+==========================================================================
+  1. CLUSTER RECALL  -- the ceiling on everything below
+==========================================================================
+  class               easy    moderate        hard         all
+  ------------------------------------------------------------
+  Car                97.2%       81.5%       75.7%       84.1%
+  Pedestrian         78.0%       71.4%       44.4%       72.6%
+  Cyclist           100.0%       66.7%      100.0%       88.5%
+
+  Objects missed here never reach the network. No amount of
+  classifier accuracy recovers them.
+
+  by range:
+  class             0-20 m     20-40 m       40+ m
+  ------------------------------------------------
+  Car                94.7%       86.2%       28.4%
+  Pedestrian         84.9%       50.0%       25.0%
+  Cyclist            81.8%       89.5%       66.7%
+
+==========================================================================
+  2. 3D AP  -- end to end, KITTI protocol
+==========================================================================
+  class          IoU       easy   moderate       hard
+  ---------------------------------------------------
+  Car            0.7      20.82       9.06       1.78
+  Pedestrian     0.5      39.94       1.70       0.85
+  Cyclist        0.5      73.12       0.00       2.63
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
