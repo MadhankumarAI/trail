@@ -577,3 +577,89 @@ frames: 100%|██████████████████████�
   Pedestrian and Cyclist at 0.5, matching the official benchmark.
   These are end-to-end numbers: an object lost by clustering counts
   as a miss here, unlike the training F1.
+
+
+
+
+
+v4:
+
+(base) user02@ubuntu-Standard-PC-Q35-ICH9-2009:~/Downloads/trail/pointnet-det$ tail -20 runs/pca2_yaw_v4.log
+                  ctr m   size m  yaw deg
+  Car              0.34     0.15      5.0
+  Pedestrian       0.18     0.12     15.3
+  Cyclist          0.20     0.10      9.1
+
+epoch  80/80  loss 0.9092  24s  [raw]
+  class         support    prec     rec      F1
+  Background     37,681   0.993   0.985   0.989
+  Car             4,450   0.912   0.963   0.937
+  Pedestrian        514   0.808   0.850   0.828
+  Cyclist           276   0.745   0.859   0.798
+  -------------------------------------------
+  foreground recall 0.946   mean F1 (fg) 0.854
+  centre err 0.32 m   heading err 6.2 deg
+                  ctr m   size m  yaw deg
+  Car              0.34     0.15      5.0
+  Pedestrian       0.18     0.12     15.3
+  Cyclist          0.20     0.10      9.2
+
+best foreground F1 0.8593   -> /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw
+[1]+  Done                    nohup .venv/bin/python -u -m pnd.train --canon pca2_yaw --epochs 80 --num-workers 16 > runs/pca2_yaw_v4.log 2>&1
+
+
+
+(base) user02@ubuntu-Standard-PC-Q35-ICH9-2009:~/Downloads/trail/pointnet-det$ .venv/bin/python -m pnd.evaluate --canon pca2_yaw --max-frames 400
+loaded /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw/best.pt   canon=pca2_yaw
+evaluating on 400 validation frames
+
+frames: 100%|███████████████████████████████| 400/400 [00:24<00:00, 16.52it/s]
+
+==========================================================================
+  1. CLUSTER RECALL  -- the ceiling on everything below
+==========================================================================
+  class               easy    moderate        hard         all
+  ------------------------------------------------------------
+  Car                97.2%       85.7%       82.3%       85.4%
+  Pedestrian         73.3%       67.6%       61.8%       66.7%
+  Cyclist            88.9%       81.9%       82.4%       83.8%
+
+  Objects missed here never reach the network. No amount of
+  classifier accuracy recovers them.
+
+  by range:
+  class             0-20 m     20-40 m       40+ m
+  ------------------------------------------------
+  Car                95.3%       83.5%       27.7%
+  Pedestrian         74.6%       41.1%       27.3%
+  Cyclist            79.4%       88.4%       33.3%
+
+==========================================================================
+  2. 3D AP  -- end to end, KITTI protocol
+==========================================================================
+  class          IoU        easy (n)    moderate (n)        hard (n)
+  ------------------------------------------------------------------
+  Car            0.7     16.32 (287)     22.38 (845)    23.65 (1174)
+  Pedestrian     0.5     29.77 (105)     26.34 (145)     23.69 (173)
+  Cyclist        0.5      57.59 (45)      57.20 (72)      57.83 (74)
+
+==========================================================================
+  3. AP vs IoU THRESHOLD  -- is the loss detection, or box geometry?
+==========================================================================
+  A steep fall from 0.3 to 0.7 means objects ARE being found and
+  classified, but the predicted boxes are not tight enough. A flat
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                55.58       49.92       22.38
+  Pedestrian         55.98       26.34        0.89
+  Cyclist            64.92       57.20       12.79
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
+

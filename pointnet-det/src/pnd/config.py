@@ -57,6 +57,7 @@ class Config:
     box_loss_w: float = 1.0
     corner_loss_w: float = 0.5   # regulariser weight, not a replacement
     seed: int = 0
+    tag: Optional[str] = None   # run dir name; keeps seeds apart
     num_workers: int = 4
 
     # --- augmentation -------------------------------------------------#

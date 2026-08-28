@@ -239,7 +239,7 @@ def train(cfg: Config) -> dict:
                 pe.copy_(pm)
 
     cfg.run_dir.mkdir(parents=True, exist_ok=True)
-    out_dir = cfg.run_dir / cfg.canon
+    out_dir = cfg.run_dir / (cfg.tag or cfg.canon)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     best, history = -1.0, []
@@ -319,9 +319,14 @@ def main() -> None:
     ap.add_argument("--num-workers", type=int, default=None)
     ap.add_argument("--no-compile", action="store_true",
                     help="disable torch.compile even where it is supported")
+    ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--tag", default=None,
+                    help="run directory name; defaults to the canon name. "
+                         "Set it for multi-seed runs, or every seed writes "
+                         "best.pt and history.json to the same place.")
     a = ap.parse_args()
     cfg = Config.load(a.config, canon=a.canon, epochs=a.epochs, lr=a.lr,
-                      num_workers=a.num_workers)
+                      num_workers=a.num_workers, seed=a.seed, tag=a.tag)
     if a.batch_size:
         cfg.batch_size = a.batch_size
     if a.no_compile:
