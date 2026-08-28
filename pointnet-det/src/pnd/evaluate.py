@@ -274,7 +274,7 @@ def run_frame(frame: str, cfg: Config, model, device, opt=None):
     dets = []
     yaw_off = np.arctan2(Rc[:, 1, 0], Rc[:, 0, 0])
     reject_bg = opt.get("reject_bg", False)
-    score_mode = opt.get("score_mode", "class")
+    score_mode = opt.get("score_mode", "fg")
     min_score = opt.get("min_score", 0.05)
 
     for i in range(B):
@@ -344,8 +344,14 @@ def main() -> None:
     ap.add_argument("--max-frames", type=int, default=None,
                     help="evaluate on a subset, for a quick check")
     ap.add_argument("--reject-bg", action="store_true",
-                    help="drop clusters classified as background")
-    ap.add_argument("--score-mode", choices=["class", "fg"], default="class")
+                    help="drop clusters classified as background. MEASURED "
+                         "HARMFUL - leave off. In AP a rejected cluster can "
+                         "never match a ground-truth box, so every rejection "
+                         "is a guaranteed miss when wrong, while a kept "
+                         "low-scored cluster sorts below the true positives "
+                         "and costs almost nothing.")
+    ap.add_argument("--score-mode", choices=["class", "fg"], default="fg",
+                    help="fg = 1 - p(background), the better ranking signal")
     ap.add_argument("--nms", type=float, default=0.0,
                     help="per-class 3D IoU suppression threshold; 0 disables")
     ap.add_argument("--min-score", type=float, default=0.05)
