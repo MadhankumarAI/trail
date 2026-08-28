@@ -29,6 +29,7 @@ import torch
 from torch.utils.data import Dataset
 
 from .bench_canon import pca2_batch, pca3_batch
+from .boxes import encode_heading
 from .config import Config
 
 # KITTI mean dimensions (l, w, h). Size is regressed as a log-ratio against
@@ -207,13 +208,16 @@ class Collate:
             inten[:, :, None],
         ], axis=2).transpose(0, 2, 1)                  # (B, 6, P)
 
+        hb, hr = encode_heading(yaw_t)
         out = {
             "x": torch.from_numpy(feats).float(),
             "cls": torch.from_numpy(cls),
             "center": torch.from_numpy(dc).float(),
             "size_log": torch.from_numpy(size_log).float(),
-            "yaw_sc": torch.from_numpy(
-                np.stack([np.sin(yaw_t), np.cos(yaw_t)], 1)).float(),
+            "head_bin": torch.from_numpy(hb),
+            "head_res": torch.from_numpy(hr).float(),
+            "dims": torch.from_numpy(dims_gt).float(),
+            "anchor": torch.from_numpy(anch.astype(np.float64)).float(),
             "scale": torch.from_numpy(scale).float(),
         }
 

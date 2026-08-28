@@ -29,6 +29,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from .boxes import (NUM_HEADING_BINS, BIN_WIDTH, corner_loss,
+                    decode_heading, anchor_diagonal)
 from .config import Config
 from .dataset import loaders
 from .kitti import CLASSES
@@ -36,13 +38,35 @@ from .model import build
 
 
 def box_loss(out, batch, fg):
+    """Corner loss plus binned heading, on foreground only.
+
+    The corner term is what ties this to the metric: it penalises centre, size
+    and heading through their joint geometric effect, scaled by the class anchor
+    diagonal so a pedestrian-ruining error costs more than the same error on a
+    car. The heading bin is trained with teacher forcing -- the corner loss uses
+    the ground-truth bin with the predicted residual, so gradient flows into the
+    residual without argmax blocking it.
+    """
+    z = out["center"].sum() * 0.0
     if fg.sum() == 0:
-        z = out["center"].sum() * 0.0
         return z, z, z
-    lc = F.smooth_l1_loss(out["center"][fg], batch["center"][fg])
-    ls = F.smooth_l1_loss(out["size_log"][fg], batch["size_log"][fg])
-    ly = (1.0 - (out["yaw_sc"][fg] * batch["yaw_sc"][fg]).sum(1)).mean()
-    return lc, ls, ly
+
+    hb_logit = out["head_bin"][fg]
+    hb_gt = batch["head_bin"][fg]
+    l_bin = F.cross_entropy(hb_logit, hb_gt)
+    res_at_gt = out["head_res"][fg].gather(1, hb_gt.unsqueeze(1)).squeeze(1)
+    l_res = F.smooth_l1_loss(res_at_gt, batch["head_res"][fg])
+
+    anchor = batch["anchor"][fg]
+    scale = batch["scale"][fg].unsqueeze(1)
+    dims_pred = torch.exp(out["size_log"][fg].clamp(-2.0, 2.0)) * anchor
+    yaw_pred = decode_heading(hb_gt.float(), res_at_gt)
+    yaw_gt = decode_heading(hb_gt.float(), batch["head_res"][fg])
+
+    l_corner = corner_loss(out["center"][fg] * scale, dims_pred, yaw_pred,
+                           batch["center"][fg] * scale, batch["dims"][fg],
+                           yaw_gt, anchor_diagonal(anchor))
+    return l_corner, l_bin, l_res
 
 
 @torch.no_grad()
@@ -64,8 +88,15 @@ def evaluate(model, loader, device, amp_dtype, num_classes):
             sc = b["scale"].to(device)[fg]
             ctr_err += ((out["center"][fg].float() - b["center"].to(device)[fg])
                         .norm(dim=1) * sc).sum().item()
-            cs = (out["yaw_sc"][fg].float() * b["yaw_sc"].to(device)[fg]).sum(1)
-            yaw_err += torch.rad2deg(torch.acos(cs.clamp(-1, 1))).sum().item()
+            hb = out["head_bin"][fg].float().argmax(1)
+            hr = out["head_res"][fg].float().gather(1, hb.unsqueeze(1)).squeeze(1)
+            yp = decode_heading(hb.float(), hr)
+            yg = decode_heading(b["head_bin"].to(device)[fg].float(),
+                                b["head_res"].to(device)[fg])
+            # fold to [0, 90]: a box rotated by pi is the same box
+            d = torch.remainder(yp - yg, np.pi)
+            d = torch.minimum(d, np.pi - d)
+            yaw_err += torch.rad2deg(d).sum().item()
             n_fg += int(fg.sum())
     return conf, (ctr_err / max(n_fg, 1)), (yaw_err / max(n_fg, 1))
 
@@ -176,7 +207,8 @@ def train(cfg: Config) -> dict:
         for b in tl:
             x = b["x"].to(cfg.device, non_blocking=True)
             y = b["cls"].to(cfg.device, non_blocking=True)
-            for k in ("center", "size_log", "yaw_sc"):
+            for k in ("center", "size_log", "head_bin", "head_res",
+                      "dims", "anchor", "scale"):
                 b[k] = b[k].to(cfg.device, non_blocking=True)
 
             with torch.autocast(cfg.device,
@@ -187,8 +219,8 @@ def train(cfg: Config) -> dict:
                 lcls = F.cross_entropy(out["logits"], y, weight=wt,
                                        label_smoothing=cfg.label_smoothing)
                 fg = y > 0
-                lc, ls, ly = box_loss(out, b, fg)
-                loss = lcls + cfg.box_loss_w * (lc + ls + ly)
+                lcorner, lbin, lres = box_loss(out, b, fg)
+                loss = lcls + cfg.box_loss_w * (lcorner + 0.5 * lbin + lres)
 
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()

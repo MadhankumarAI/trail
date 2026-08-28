@@ -42,6 +42,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .boxes import NUM_HEADING_BINS
+
 
 # --------------------------------------------------------------------------- #
 def _mlp1d(dims, bn=True):
@@ -137,17 +139,20 @@ class ClusterNet(nn.Module):
             nn.Linear(512, 256), nn.BatchNorm1d(256), nn.ReLU(inplace=True),
         )
         self.cls_head = nn.Linear(256, num_classes)
-        self.box_head = nn.Linear(256, 3 + 3 + 2)   # dc, log size ratio, sin/cos
+        # centre(3) + log size ratio(3) + heading bin logits + bin residuals
+        self.box_head = nn.Linear(256, 3 + 3 + 2 * NUM_HEADING_BINS)
 
     def forward(self, x: torch.Tensor) -> dict:
         g, _, m = self.encoder(x)
         h = self.trunk(g)
         box = self.box_head(h)
+        nb = NUM_HEADING_BINS
         return {
             "logits": self.cls_head(h),
             "center": box[:, 0:3],
             "size_log": box[:, 3:6],
-            "yaw_sc": F.normalize(box[:, 6:8], dim=1),
+            "head_bin": box[:, 6:6 + nb],
+            "head_res": box[:, 6 + nb:6 + 2 * nb],
             "tnet": m,
         }
 
@@ -194,7 +199,8 @@ class MultiFramePointNet(nn.Module):
             "logits": sel(out["logits"]),
             "center": sel(out["center"]),
             "size_log": sel(out["size_log"]),
-            "yaw_sc": F.normalize(sel(out["yaw_sc"]), dim=1),
+            "head_bin": sel(out["head_bin"]),
+            "head_res": sel(out["head_res"]),
             "frame_idx": pick,
             "tnet": None,
         }

@@ -39,6 +39,7 @@ import torch
 from tqdm import tqdm
 
 from .cluster import cluster_points
+from .boxes import decode_heading
 from .config import Config
 from .dataset import ANCHORS
 from .ground import remove_ground
@@ -258,7 +259,9 @@ def run_frame(frame: str, cfg: Config, model, device):
     prob = out["logits"].float().softmax(1).cpu().numpy()
     dc = out["center"].float().cpu().numpy()
     sl = out["size_log"].float().cpu().numpy()
-    ys = out["yaw_sc"].float().cpu().numpy()
+    hb = out["head_bin"].float().argmax(1)
+    hr = out["head_res"].float().gather(1, hb.unsqueeze(1)).squeeze(1)
+    yaw_pred = decode_heading(hb.float(), hr).cpu().numpy()
 
     dets = []
     yaw_off = np.arctan2(Rc[:, 1, 0], Rc[:, 0, 0])
@@ -269,7 +272,7 @@ def run_frame(frame: str, cfg: Config, model, device):
             continue
         ctr = Rc[i].T @ (dc[i] * scale[i]) + tc[i]
         dims = np.exp(sl[i]) * ANCHORS[c]
-        yaw = float(np.arctan2(ys[i, 0], ys[i, 1]) - yaw_off[i])
+        yaw = float(yaw_pred[i] - yaw_off[i])
         dets.append({"cls": c, "score": score,
                      "box": np.array([ctr[0], ctr[1], ctr[2],
                                       dims[0], dims[1], dims[2], yaw])})
