@@ -142,12 +142,22 @@ def val_frame_ids(cfg: Config):
     return sorted(int(f) for f in uf[:n_val])
 
 
-def difficulty_of(o) -> str | None:
+def difficulties_of(o) -> set:
+    """Every KITTI difficulty bucket this object belongs to.
+
+    The buckets are NESTED, not exclusive: an object meeting the easy criteria
+    also counts towards moderate and hard. Assigning each object to only the
+    easiest bucket it qualifies for leaves 'moderate' holding just the objects
+    that FAIL easy, which is a small and unnaturally hard subset -- it produced
+    Cyclist easy 73.12 / moderate 0.00 / hard 2.63, and makes the numbers
+    incomparable to any published result.
+    """
     h = o.bbox2d[3] - o.bbox2d[1]
+    out = set()
     for name, min_h, max_occ, max_tr in DIFFICULTY:
         if h >= min_h and o.occlusion <= max_occ and o.truncation <= max_tr:
-            return name
-    return None
+            out.add(name)
+    return out
 
 
 @torch.no_grad()
@@ -322,11 +332,11 @@ def main() -> None:
         fid = f"{f:06d}"
         dets, objs, hits, calib = run_frame(fid, cfg, model, cfg.device)
         for oi, o in enumerate(objs):
-            d = difficulty_of(o)
             cname = CLASSES[o.class_id]
-            clu_tot[(cname, d)] += 1
-            if hits.get(oi, False):
-                clu_hit[(cname, d)] += 1
+            for d in difficulties_of(o):
+                clu_tot[(cname, d)] += 1
+                if hits.get(oi, False):
+                    clu_hit[(cname, d)] += 1
             rr = float(np.linalg.norm(o.loc_cam[[0, 2]]))
             band = "0-20" if rr < 20 else "20-40" if rr < 40 else "40+"
             rng_tot[(cname, band)] += 1
@@ -335,7 +345,7 @@ def main() -> None:
         all_dets.append(dets)
         all_gt.append({"boxes": gt_boxes_velo(objs, calib),
                        "cls": np.array([o.class_id for o in objs], dtype=int),
-                       "diff": [difficulty_of(o) for o in objs]})
+                       "diff": [difficulties_of(o) for o in objs]})
 
     # ------------------------------------------------------------------ #
     print("\n" + "=" * 74)
@@ -369,12 +379,12 @@ def main() -> None:
     print("\n" + "=" * 74)
     print("  2. 3D AP  -- end to end, KITTI protocol")
     print("=" * 74)
-    print(f"  {'class':<12}{'IoU':>6}{'easy':>11}{'moderate':>11}{'hard':>11}")
-    print("  " + "-" * 51)
+    print(f"  {'class':<12}{'IoU':>6}{'easy (n)':>16}{'moderate (n)':>16}{'hard (n)':>16}")
+    print("  " + "-" * 66)
 
     for ci, cname in enumerate(CLASSES[1:], start=1):
         thr = IOU_THRESH[cname]
-        cells = []
+        cells, counts = [], []
         for diff in ("easy", "moderate", "hard"):
             # KITTI counts a detection as correct only against GT of the same
             # difficulty, and each GT may be matched at most once. Detections
@@ -385,7 +395,7 @@ def main() -> None:
             for fi in range(len(all_dets)):
                 g = all_gt[fi]
                 idx = [j for j in range(len(g["cls"]))
-                       if g["cls"][j] == ci and g["diff"][j] == diff]
+                       if g["cls"][j] == ci and diff in g["diff"][j]]
                 n_gt += len(idx)
                 used = set()
                 cand = sorted([d for d in all_dets[fi] if d["cls"] == ci],
@@ -412,7 +422,56 @@ def main() -> None:
             rec = tp / n_gt
             prec = tp / np.maximum(tp + fp, 1e-9)
             cells.append(f"{100*average_precision(rec, prec):.2f}")
-        print(f"  {cname:<12}{thr:>6.1f}{cells[0]:>11}{cells[1]:>11}{cells[2]:>11}")
+            counts.append(n_gt)
+        print(f"  {cname:<12}{thr:>6.1f}"
+              f"{cells[0]+' ('+str(counts[0])+')':>16}"
+              f"{cells[1]+' ('+str(counts[1])+')':>16}"
+              f"{cells[2]+' ('+str(counts[2])+')':>16}")
+
+    # ------------------------------------------------------------------ #
+    print()
+    print("=" * 74)
+    print("  3. AP vs IoU THRESHOLD  -- is the loss detection, or box geometry?")
+    print("=" * 74)
+    print("  A steep fall from 0.3 to 0.7 means objects ARE being found and")
+    print("  classified, but the predicted boxes are not tight enough. A flat")
+    print("  low line means they are not being found at all.")
+    print()
+    sweep = [0.3, 0.5, 0.7]
+    print(f"  {'class':<12}" + "".join(f"{'IoU '+str(t):>12}" for t in sweep))
+    print("  " + "-" * 48)
+    for ci, cname in enumerate(CLASSES[1:], start=1):
+        cells = []
+        for t in sweep:
+            n_gt, scored = 0, []
+            for fi in range(len(all_dets)):
+                g = all_gt[fi]
+                idx = [j for j in range(len(g["cls"]))
+                       if g["cls"][j] == ci and "moderate" in g["diff"][j]]
+                n_gt += len(idx)
+                used = set()
+                for d in sorted([d for d in all_dets[fi] if d["cls"] == ci],
+                                key=lambda d: -d["score"]):
+                    best, bj = 0.0, -1
+                    for j in idx:
+                        if j in used:
+                            continue
+                        v = box_iou_3d(d["box"], g["boxes"][j])
+                        if v > best:
+                            best, bj = v, j
+                    if best >= t and bj >= 0:
+                        used.add(bj); scored.append((d["score"], 1))
+                    else:
+                        scored.append((d["score"], 0))
+            if n_gt == 0 or not scored:
+                cells.append("-"); continue
+            scored.sort(key=lambda z: -z[0])
+            tp = np.cumsum([z[1] for z in scored])
+            fp = np.cumsum([1 - z[1] for z in scored])
+            cells.append(f"{100*average_precision(tp/n_gt, tp/np.maximum(tp+fp,1e-9)):.2f}")
+        print(f"  {cname:<12}" + "".join(f"{c:>12}" for c in cells))
+    print()
+    print("  (moderate difficulty)")
 
     print()
     print("  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,")
