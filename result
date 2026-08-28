@@ -483,3 +483,97 @@ frames: 100%|██████████████████████�
   Pedestrian and Cyclist at 0.5, matching the official benchmark.
   These are end-to-end numbers: an object lost by clustering counts
   as a miss here, unlike the training F1.
+
+
+
+
+
+arm	F1	added latency	device
+pca2_yaw	0.8405	0.068 ms	CPU
+pca3_skew	0.7712	0.098 ms	CPU
+tnet3	0.7574	15.89 ms	GPU
+pca4_ensemble	0.7403	86 ms	GPU
+none	0.7278	0	—
+
+
+Both PCA variants beat the learned T-Net. The yaw-only version wins by +7.8% F1 while being 235× cheaper — and it runs on the CPU, so in a pipelined system it's off the critical path entirely. T-Net adds 55% to inference; PCA adds 0.34%.
+
+
+finally : a deterministic geometric operation beats a learned module while being 235× cheaper — but only when scoped to the nuisance that actually exists.
+
+
+
+run3:
+
+
+epoch  80/80  loss 0.8791  23s  [raw]
+  class         support    prec     rec      F1
+  Background     37,681   0.993   0.984   0.988
+  Car             4,450   0.908   0.960   0.933
+  Pedestrian        514   0.781   0.846   0.812
+  Cyclist           276   0.750   0.837   0.791
+  -------------------------------------------
+  foreground recall 0.942   mean F1 (fg) 0.846
+  centre err 0.39 m   heading err 6.4 deg
+
+best foreground F1 0.8490   -> /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw
+[1]+  Done                    nohup .venv/bin/python -u -m pnd.train --canon pca2_yaw --epochs 80 --num-workers 16 > runs/pca2_yaw_v3.log 2>&1
+
+
+
+
+
+
+(base) user02@ubuntu-Standard-PC-Q35-ICH9-2009:~/Downloads/trail/pointnet-det$ .venv/bin/python -m pnd.evaluate --canon pca2_yaw --max-frames 400
+loaded /home/user02/Downloads/trail/pointnet-det/runs/pca2_yaw/best.pt   canon=pca2_yaw
+evaluating on 400 validation frames
+
+frames: 100%|███████████████████████████████| 400/400 [00:23<00:00, 16.84it/s]
+
+==========================================================================
+  1. CLUSTER RECALL  -- the ceiling on everything below
+==========================================================================
+  class               easy    moderate        hard         all
+  ------------------------------------------------------------
+  Car                97.2%       85.7%       82.3%       85.4%
+  Pedestrian         73.3%       67.6%       61.8%       66.7%
+  Cyclist            88.9%       81.9%       82.4%       83.8%
+
+  Objects missed here never reach the network. No amount of
+  classifier accuracy recovers them.
+
+  by range:
+  class             0-20 m     20-40 m       40+ m
+  ------------------------------------------------
+  Car                95.3%       83.5%       27.7%
+  Pedestrian         74.6%       41.1%       27.3%
+  Cyclist            79.4%       88.4%       33.3%
+
+==========================================================================
+  2. 3D AP  -- end to end, KITTI protocol
+==========================================================================
+  class          IoU        easy (n)    moderate (n)        hard (n)
+  ------------------------------------------------------------------
+  Car            0.7     17.13 (287)     19.11 (845)    18.68 (1174)
+  Pedestrian     0.5     29.58 (105)     27.69 (145)     24.21 (173)
+  Cyclist        0.5      50.26 (45)      45.70 (72)      45.54 (74)
+
+==========================================================================
+  3. AP vs IoU THRESHOLD  -- is the loss detection, or box geometry?
+==========================================================================
+  A steep fall from 0.3 to 0.7 means objects ARE being found and
+  classified, but the predicted boxes are not tight enough. A flat
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                57.17       48.89       19.11
+  Pedestrian         51.97       27.69        1.34
+  Cyclist            64.61       45.70        9.09
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
