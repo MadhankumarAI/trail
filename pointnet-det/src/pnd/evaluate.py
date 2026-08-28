@@ -162,8 +162,16 @@ def difficulties_of(o) -> set:
 
 
 @torch.no_grad()
-def run_frame(frame: str, cfg: Config, model, device):
-    """Full pipeline on one frame. Returns (detections, gt_objects, cluster_hits)."""
+def run_frame(frame: str, cfg: Config, model, device, opt=None):
+    """Full pipeline on one frame.
+
+    `opt` carries the false-positive controls so each can be measured alone:
+        reject_bg   drop clusters whose argmax over ALL classes is background
+        score_mode  "class" = p(class); "fg" = 1 - p(background)
+        nms         per-class 3D IoU suppression threshold, 0 disables
+        min_score   confidence floor
+    """
+    opt = opt or {}
     from .bench_canon import pca2_batch, pca3_batch
     from .dataset import _rot_z
 
@@ -265,17 +273,48 @@ def run_frame(frame: str, cfg: Config, model, device):
 
     dets = []
     yaw_off = np.arctan2(Rc[:, 1, 0], Rc[:, 0, 0])
+    reject_bg = opt.get("reject_bg", False)
+    score_mode = opt.get("score_mode", "class")
+    min_score = opt.get("min_score", 0.05)
+
     for i in range(B):
-        c = int(prob[i, 1:].argmax()) + 1
-        score = float(prob[i, c])
-        if c == 0 or score < 0.05:
+        # Argmax over ALL classes, background included. The original took
+        # argmax over prob[1:] only, so every cluster emitted a detection even
+        # when the classifier confidently said background -- roughly 23 false
+        # positives per frame against ~3 real objects. (The old `if c == 0`
+        # guard was dead code: an argmax over prob[1:] can never return 0.)
+        top = int(prob[i].argmax())
+        if reject_bg and top == 0:
             continue
+        c = top if top > 0 else int(prob[i, 1:].argmax()) + 1
+
+        # "class" ranks by p(class); "fg" by total foreground mass, which ranks
+        # better when the model is split between two foreground classes.
+        score = float(1.0 - prob[i, 0]) if score_mode == "fg" else float(prob[i, c])
+        if score < min_score:
+            continue
+
         ctr = Rc[i].T @ (dc[i] * scale[i]) + tc[i]
         dims = np.exp(sl[i]) * ANCHORS[c]
         yaw = float(yaw_pred[i] - yaw_off[i])
         dets.append({"cls": c, "score": score,
                      "box": np.array([ctr[0], ctr[1], ctr[2],
                                       dims[0], dims[1], dims[2], yaw])})
+
+    # Per-class 3D NMS. Nothing otherwise stops two adjacent clusters both
+    # claiming the same car.
+    thr = opt.get("nms", 0.0)
+    if thr > 0 and dets:
+        kept = []
+        for c in set(d["cls"] for d in dets):
+            cand = sorted([d for d in dets if d["cls"] == c],
+                          key=lambda d: -d["score"])
+            while cand:
+                best = cand.pop(0)
+                kept.append(best)
+                cand = [d for d in cand
+                        if box_iou_3d(best["box"], d["box"]) < thr]
+        dets = kept
     return dets, objs, hits, calib
 
 
@@ -304,7 +343,15 @@ def main() -> None:
     ap.add_argument("--ckpt", type=Path, default=None)
     ap.add_argument("--max-frames", type=int, default=None,
                     help="evaluate on a subset, for a quick check")
+    ap.add_argument("--reject-bg", action="store_true",
+                    help="drop clusters classified as background")
+    ap.add_argument("--score-mode", choices=["class", "fg"], default="class")
+    ap.add_argument("--nms", type=float, default=0.0,
+                    help="per-class 3D IoU suppression threshold; 0 disables")
+    ap.add_argument("--min-score", type=float, default=0.05)
     a = ap.parse_args()
+    OPT = {"reject_bg": a.reject_bg, "score_mode": a.score_mode,
+           "nms": a.nms, "min_score": a.min_score}
 
     cfg = Config.load(a.config, canon=a.canon)
     ckpt_p = a.ckpt or (cfg.run_dir / cfg.canon / "best.pt")
@@ -326,6 +373,7 @@ def main() -> None:
 
     np.random.seed(cfg.seed)
     all_dets, all_gt = [], []
+    n_det = 0
     clu_tot = defaultdict(int)
     clu_hit = defaultdict(int)
     rng_tot = defaultdict(int)
@@ -333,7 +381,7 @@ def main() -> None:
 
     for f in tqdm(frames, ncols=78, desc="frames"):
         fid = f"{f:06d}"
-        dets, objs, hits, calib = run_frame(fid, cfg, model, cfg.device)
+        dets, objs, hits, calib = run_frame(fid, cfg, model, cfg.device, OPT)
         for oi, o in enumerate(objs):
             cname = CLASSES[o.class_id]
             for d in difficulties_of(o):
@@ -345,6 +393,7 @@ def main() -> None:
             rng_tot[(cname, band)] += 1
             if hits.get(oi, False):
                 rng_hit[(cname, band)] += 1
+        n_det += len(dets)
         all_dets.append(dets)
         all_gt.append({"boxes": gt_boxes_velo(objs, calib),
                        "cls": np.array([o.class_id for o in objs], dtype=int),
