@@ -115,19 +115,59 @@ class Collate:
         rng_raw = np.linalg.norm(xyz, axis=2)          # before any rotation
 
         ctr_gt = meta[:, 1:4].copy()
-        dims_gt = meta[:, 4:7]
+        dims_gt = meta[:, 4:7].copy()
         yaw_gt = meta[:, 7].copy()
         cls = meta[:, 0].astype(np.int64)
 
-        # yaw augmentation: rotate the whole proposal about the sensor z axis.
-        # Free, exactly matches the real nuisance, and unlike canonicalisation
-        # it cannot be inconsistent across viewpoints.
-        if self.train and cfg.yaw_aug:
-            a = np.random.uniform(-np.pi, np.pi, B)
-            R = _rot_z(a)
-            xyz = np.einsum("bij,bpj->bpi", R, xyz)
-            ctr_gt = np.einsum("bij,bj->bi", R, ctr_gt)
-            yaw_gt = yaw_gt + a
+        # ---- augmentation ---------------------------------------------- #
+        if self.train:
+            # yaw: rotate about the sensor z axis. Free, exactly matches the
+            # real nuisance, and unlike canonicalisation it cannot be
+            # inconsistent across viewpoints.
+            if cfg.yaw_aug:
+                a = np.random.uniform(-np.pi, np.pi, B)
+                R = _rot_z(a)
+                xyz = np.einsum("bij,bpj->bpi", R, xyz)
+                ctr_gt = np.einsum("bij,bj->bi", R, ctr_gt)
+                yaw_gt = yaw_gt + a
+
+            # mirror about x. A car seen from the left is a valid car seen from
+            # the right; heading negates with it.
+            if cfg.aug_flip:
+                f = np.random.rand(B) < 0.5
+                xyz[f, :, 1] *= -1.0
+                ctr_gt[f, 1] *= -1.0
+                yaw_gt[f] *= -1.0
+
+            # point dropout: keep a random fraction, then refill to P by
+            # repeating what survived. Simulates the same object arriving with
+            # far fewer returns because it is further away.
+            if cfg.aug_dropout > 0:
+                for b in range(B):
+                    keep = np.random.uniform(1.0 - cfg.aug_dropout, 1.0)
+                    k = max(int(P * keep), 8)
+                    idx = np.random.choice(P, k, replace=False)
+                    fill = np.random.choice(idx, P, replace=True)
+                    xyz[b] = xyz[b][fill]
+                    inten[b] = inten[b][fill]
+                    agl[b] = agl[b][fill]
+                    rng_raw[b] = rng_raw[b][fill]
+
+            # scale: object-size variation the anchors do not cover.
+            # Scale about the cluster centroid, NOT the sensor origin. Scaling
+            # raw coordinates moves an object at 20 m by 1.6 m at 8% -- a large
+            # translation masquerading as a size change, which corrupts the
+            # centre target and desynchronises the range/height channels.
+            if cfg.aug_scale > 0:
+                sc = np.random.uniform(1 - cfg.aug_scale, 1 + cfg.aug_scale, B)
+                c0 = xyz.mean(axis=1, keepdims=True)          # (B, 1, 3)
+                xyz = c0 + (xyz - c0) * sc[:, None, None]
+                ctr_gt = c0[:, 0, :] + (ctr_gt - c0[:, 0, :]) * sc[:, None]
+                dims_gt = dims_gt * sc[:, None]
+
+            # jitter: sensor range noise, a couple of centimetres
+            if cfg.aug_jitter > 0:
+                xyz += np.random.normal(0.0, cfg.aug_jitter, xyz.shape)
 
         # ---- canonicalise --------------------------------------------- #
         flat = np.ascontiguousarray(xyz.reshape(-1, 3))

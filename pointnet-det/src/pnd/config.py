@@ -56,8 +56,27 @@ class Config:
     weight_decay: float = 1e-4
     box_loss_w: float = 1.0
     seed: int = 0
-    yaw_aug: bool = True                  # random yaw at train time
     num_workers: int = 4
+
+    # --- augmentation -------------------------------------------------#
+    # 84% of clusters hold fewer than n_points real points (median 55), so the
+    # network mostly sees duplicated points. These augmentations put genuine
+    # variation back in. Point dropout is the important one: it simulates the
+    # 5000x density falloff measured between the near field and 40-80 m, so the
+    # model stops assuming an object always arrives with the same point budget.
+    yaw_aug: bool = True                  # random heading
+    aug_dropout: float = 0.4              # max fraction of points discarded
+    aug_jitter: float = 0.02              # per-point gaussian noise, metres
+    aug_scale: float = 0.08               # +/- fraction
+    aug_flip: bool = True                 # mirror about the x axis
+
+    # --- loss ---------------------------------------------------------#
+    # "inv" gave weights [0.28, 2.46, 20, 20]; recall hit 0.97 and precision
+    # collapsed to 0.65. "sqrt_inv" is the gentler standard alternative.
+    weight_mode: str = "sqrt_inv"         # inv | sqrt_inv | none
+    weight_clip: float = 8.0
+    label_smoothing: float = 0.05
+    ema_decay: float = 0.999              # 0 disables
 
     # --- filled in by detect() --------------------------------------- #
     device: str = "cpu"

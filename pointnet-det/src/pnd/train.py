@@ -104,9 +104,25 @@ def train(cfg: Config) -> dict:
     print("class counts:", dict(zip(CLASSES, counts.tolist())))
     print(f"bg:fg = {counts[0] / max(counts[1:].sum(), 1):.1f} : 1")
 
-    w = counts.sum() / (cfg.num_classes * np.maximum(counts, 1))
-    w = np.clip(w, 0.2, 20.0)
-    print("class weights:", np.round(w, 2).tolist(), "\n")
+    # Inverse frequency gives [0.28, 2.57, 19.2, 20] and buys recall with false
+    # positives: measured Car precision 0.86 against recall 0.98, Pedestrian
+    # 0.65 against 0.92. sqrt-inverse is the gentler standard alternative.
+    #
+    # Normalised so the EXPECTED weight over the data is 1 (sum(w * freq) = 1).
+    # Dividing by w.mean() instead shrinks the classification loss by ~10x
+    # relative to the box loss, which then dominates.
+    freq = np.maximum(counts, 1) / counts.sum()
+    if cfg.weight_mode == "inv":
+        w = 1.0 / freq
+    elif cfg.weight_mode == "sqrt_inv":
+        w = 1.0 / np.sqrt(freq)
+    elif cfg.weight_mode == "none":
+        w = np.ones_like(freq)
+    else:
+        raise ValueError(f"weight_mode must be inv|sqrt_inv|none, got {cfg.weight_mode!r}")
+    w = w / float((w * freq).sum())
+    w = np.clip(w, 1.0 / cfg.weight_clip, cfg.weight_clip)
+    print(f"class weights ({cfg.weight_mode}):", np.round(w, 3).tolist(), "\n")
     wt = torch.tensor(w, dtype=torch.float32, device=cfg.device)
 
     model = build(cfg).to(cfg.device)
@@ -128,6 +144,27 @@ def train(cfg: Config) -> dict:
         pct_start=0.3)
     scaler = torch.amp.GradScaler(cfg.device, enabled=cfg.amp_dtype == "float16")
 
+    # Exponential moving average of the weights. Cheap, and it removes most of
+    # the epoch-to-epoch thrash seen in the first ablation, where Pedestrian F1
+    # swung between 0.28 and 0.68 on a 514-sample validation slice.
+    ema = None
+    if cfg.ema_decay > 0:
+        import copy
+        ema = copy.deepcopy(model).eval()
+        for q in ema.parameters():
+            q.requires_grad_(False)
+
+    @torch.no_grad()
+    def ema_update():
+        if ema is None:
+            return
+        d = cfg.ema_decay
+        for pe, pm in zip(ema.state_dict().values(), model.state_dict().values()):
+            if pe.dtype.is_floating_point:
+                pe.mul_(d).add_(pm.detach(), alpha=1 - d)
+            else:
+                pe.copy_(pm)
+
     cfg.run_dir.mkdir(parents=True, exist_ok=True)
     out_dir = cfg.run_dir / cfg.canon
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -147,7 +184,8 @@ def train(cfg: Config) -> dict:
                                 if cfg.amp_dtype else torch.float32,
                                 enabled=cfg.amp_dtype is not None):
                 out = model(x)
-                lcls = F.cross_entropy(out["logits"], y, weight=wt)
+                lcls = F.cross_entropy(out["logits"], y, weight=wt,
+                                       label_smoothing=cfg.label_smoothing)
                 fg = y > 0
                 lc, ls, ly = box_loss(out, b, fg)
                 loss = lcls + cfg.box_loss_w * (lc + ls + ly)
@@ -159,22 +197,32 @@ def train(cfg: Config) -> dict:
             scaler.step(opt)
             scaler.update()
             sched.step()
+            ema_update()
             tot += float(loss.detach())
             nb += 1
 
         conf, ce, ye = evaluate(model, vl, cfg.device, cfg.amp_dtype,
                                 cfg.num_classes)
         rep = report(conf, ce, ye)
+        rep["src"] = "raw"
+        if ema is not None:
+            c2, ce2, ye2 = evaluate(ema, vl, cfg.device, cfg.amp_dtype,
+                                    cfg.num_classes)
+            r2 = report(c2, ce2, ye2)
+            if r2["f1_fg"] > rep["f1_fg"]:
+                r2["src"] = "ema"
+                rep = r2
         el = time.time() - t0
         print(f"epoch {ep+1:>3}/{cfg.epochs}  loss {tot/max(nb,1):.4f}  "
-              f"{el:.0f}s")
+              f"{el:.0f}s  [{rep['src']}]")
         print(rep["text"])
         history.append({"epoch": ep + 1, "loss": tot / max(nb, 1), **{
-            k: v for k, v in rep.items() if k != "text"}})
+            k: v for k, v in rep.items() if k not in ("text", "src")}})
 
         if rep["f1_fg"] > best:
             best = rep["f1_fg"]
-            torch.save({"model": model.state_dict(), "cfg": cfg.to_dict(),
+            keep = ema if (ema is not None and rep["src"] == "ema") else model
+            torch.save({"model": keep.state_dict(), "cfg": cfg.to_dict(),
                         "metrics": rep}, out_dir / "best.pt")
             print(f"  -> new best, saved")
         print()
