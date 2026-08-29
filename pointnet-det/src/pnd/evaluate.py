@@ -187,7 +187,7 @@ def run_frame(frame: str, cfg: Config, model, device, opt=None):
     if len(pts) < 500:
         return [], objs, {}, calib
 
-    is_ground, agl = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
+    is_ground, agl, _ = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
     op, oa = pts[~is_ground], agl[~is_ground]
     if len(op) < 50:
         return [], objs, {}, calib

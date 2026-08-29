@@ -55,7 +55,8 @@ def _fit_plane(xs, ys, zs, n):
 
 @njit(parallel=True, cache=True, fastmath=True)
 def _sector_ground(pts, order_by_sec, starts, n_sec, seed_frac, thresh,
-                   max_slope, sensor_h, is_ground, ground_z):
+                   max_slope, sensor_h, is_ground, ground_z,
+                   sec_slope, sec_rough, sec_h, sec_n):
     """One plane per sector, seeded from the lowest points in that sector.
 
     Points are pre-sorted by sector so each sector is a contiguous slice of
@@ -111,12 +112,42 @@ def _sector_ground(pts, order_by_sec, starts, n_sec, seed_frac, thresh,
         if c > -sensor_h + 1.5 or c < -sensor_h - 2.0:
             a = 0.0; b = 0.0; c = -sensor_h
 
+        # --- terrain statistics, essentially free ----------------------- #
+        # The plane fit already yields the surface gradient; slope was being
+        # computed for a sanity check and then discarded. Roughness is the RMS
+        # residual of the sector's own ground points about that plane, which
+        # costs one accumulation inside a loop already running. These two plus
+        # the inter-sector step are exactly the features the traversability
+        # literature scores drivability from.
+        sec_slope[s] = np.sqrt(a * a + b * b)
+        resid = 0.0
+        ng = 0
+        mx = 0.0
+        my = 0.0
         for j in range(cnt):
             i = idx[j]
             gz = a * pts[i, 0] + b * pts[i, 1] + c
             ground_z[i] = gz
-            if pts[i, 2] - gz < thresh:
+            d = pts[i, 2] - gz
+            if d < thresh:
                 is_ground[i] = True
+                resid += d * d
+                mx += pts[i, 0]
+                my += pts[i, 1]
+                ng += 1
+        sec_n[s] = ng
+        if ng > 2:
+            sec_rough[s] = np.sqrt(resid / ng)
+            # Height AT THE SECTOR, not at the origin. `c` is the plane's value
+            # at x=y=0, which for a sector 40 m away is an extrapolation across
+            # the whole scene: with a 2 degree slope that is over a metre of
+            # error, and differencing those between sectors measures
+            # extrapolation, not steps. Evaluating at the sector's own centroid
+            # gives the local surface height, which is what a step is a
+            # difference of.
+            mx /= ng
+            my /= ng
+            sec_h[s] = a * mx + b * my + c
 
 
 def remove_ground(pts: np.ndarray,
@@ -129,9 +160,16 @@ def remove_ground(pts: np.ndarray,
                   sensor_h: float = 1.73):
     """Split a scan into ground and non-ground.
 
-    Returns (is_ground, height_above_ground). The height is kept because it is
-    a genuinely useful, rotation-invariant network input -- far better than raw
-    z, which is measured from the laser rather than the road.
+    Returns (is_ground, height_above_ground, sector_stats).
+
+    height_above_ground is a genuinely useful, rotation-invariant network input
+    -- far better than raw z, which is measured from the laser rather than the
+    road.
+
+    sector_stats carries slope, roughness, fitted height and ground-point count
+    per polar sector, plus the sector index of every point. Those are the inputs
+    to terrain.py's drivability scoring and they cost effectively nothing here,
+    because the plane fit that produces them already runs.
     """
     xy = pts[:, :2].astype(np.float64)
     r = np.sqrt(xy[:, 0] ** 2 + xy[:, 1] ** 2)
@@ -159,7 +197,16 @@ def remove_ground(pts: np.ndarray,
     np.cumsum(counts, out=starts[1:])
     order_by_sec = np.argsort(sec_v, kind="stable").astype(np.int64)
 
-    _sector_ground(p, order_by_sec, starts, n_sec, seed_frac, thresh,
-                   max_slope, sensor_h, is_ground, ground_z)
+    sec_slope = np.zeros(n_sec)
+    sec_rough = np.zeros(n_sec)
+    sec_h = np.full(n_sec, -sensor_h)
+    sec_n = np.zeros(n_sec, np.int64)
 
-    return is_ground, (p[:, 2] - ground_z)
+    _sector_ground(p, order_by_sec, starts, n_sec, seed_frac, thresh,
+                   max_slope, sensor_h, is_ground, ground_z,
+                   sec_slope, sec_rough, sec_h, sec_n)
+
+    stats = {"slope": sec_slope, "rough": sec_rough, "h": sec_h, "n": sec_n,
+             "sec": sec, "n_radial": n_radial, "n_azimuth": n_azimuth,
+             "max_range": max_range}
+    return is_ground, (p[:, 2] - ground_z), stats

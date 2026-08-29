@@ -57,7 +57,7 @@ def frame_proposals(frame: str, cfg: Config):
     if len(pts) < 500:
         return None
 
-    is_ground, agl = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
+    is_ground, agl, _ = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
     fg = ~is_ground
     if fg.sum() < 50:
         return None
