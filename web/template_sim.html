@@ -1,0 +1,423 @@
+<title>Drive 0001, Classified</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Literata:opsz,wght@7..72,400&display=swap">
+
+<style>
+:root{
+  --ground:#F3F6F5;--surface:#fcfcfb;--surface-2:#E8EDEB;
+  --ink:#0b0b0b;--ink-2:#52514e;--muted:#6b6a66;
+  --line:#DBE3E1;--line-2:#C1CCC9;
+  --accent:#0F7C8A;--accent-soft:#DDF0F2;--accent-ink:#0A5A65;
+  --void:#0A1214;
+  --c-unscored:#5a6668;--c-terrain:#3f6b52;--c-static:#b0710d;
+  --c-car:#2a78d6;--c-ped:#eb6834;--c-cyc:#1baf7a;
+  --shadow:0 1px 2px rgba(17,26,27,.05),0 10px 28px -14px rgba(17,26,27,.20);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0B1214;--surface:#1a1a19;--surface-2:#232322;
+  --ink:#fff;--ink-2:#c3c2b7;--muted:#8e8d84;
+  --line:#2d2d2b;--line-2:#3d3d3a;
+  --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
+  --void:#070D0E;
+  --c-unscored:#4a5456;--c-terrain:#4fbf7b;--c-static:#e0a83e;
+  --c-car:#3987e5;--c-ped:#d95926;--c-cyc:#199e70;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
+}}
+:root[data-theme="dark"]{
+  --ground:#0B1214;--surface:#1a1a19;--surface-2:#232322;
+  --ink:#fff;--ink-2:#c3c2b7;--muted:#8e8d84;
+  --line:#2d2d2b;--line-2:#3d3d3a;
+  --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
+  --void:#070D0E;
+  --c-unscored:#4a5456;--c-terrain:#4fbf7b;--c-static:#e0a83e;
+  --c-car:#3987e5;--c-ped:#d95926;--c-cyc:#199e70;
+  --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"Literata",Georgia,serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Chivo",Arial,sans-serif;margin:0;line-height:1.15;letter-spacing:-.02em}
+.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+header{border-bottom:1px solid var(--line);background:var(--surface)}
+header .wrap{padding:34px 24px 26px}
+.kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--accent);font-weight:500}
+h1{font-size:clamp(28px,4.4vw,44px);font-weight:700;margin:12px 0 0}
+.dek{max-width:64ch;margin-top:12px;font-size:17.5px;color:var(--ink-2)}
+
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden;margin:26px 0}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;
+  padding:11px 14px;border-bottom:1px solid var(--line);background:var(--surface-2)}
+button.b{font-family:"JetBrains Mono",monospace;font-size:11.5px;font-weight:500;
+  padding:7px 12px;border-radius:6px;border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-2);cursor:pointer}
+button.b:hover{border-color:var(--accent);color:var(--ink)}
+button.b[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+:root[data-theme="dark"] button.b[aria-pressed="true"]{color:#0B1214}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.b[aria-pressed="true"]{color:#0B1214}}
+button.play{min-width:74px}
+input[type=range]{accent-color:var(--accent)}
+#scrub{flex:1;min-width:180px}
+.lbl{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted)}
+.val{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+
+.stage{position:relative;background:var(--void)}
+canvas{display:block;width:100%;height:auto;cursor:grab;touch-action:none}
+canvas.drag{cursor:grabbing}
+.hint{position:absolute;left:12px;bottom:10px;font-family:"JetBrains Mono",monospace;
+  font-size:10.5px;color:#7f9698;pointer-events:none}
+.fovnote{position:absolute;right:12px;top:10px;font-family:"JetBrains Mono",monospace;
+  font-size:10.5px;color:#7f9698;pointer-events:none;text-align:right;line-height:1.6}
+
+.key{display:flex;flex-wrap:wrap;gap:6px;padding:11px 14px;border-top:1px solid var(--line);
+  background:var(--surface-2)}
+.key button{display:flex;align-items:center;gap:7px;font-family:"JetBrains Mono",monospace;
+  font-size:11.5px;padding:5px 10px;border-radius:6px;border:1px solid var(--line-2);
+  background:transparent;color:var(--ink-2);cursor:pointer}
+.key button[aria-pressed="false"]{opacity:.4}
+.key i{width:11px;height:11px;border-radius:3px;display:block}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
+  gap:12px 18px;padding:15px 18px;border-top:1px solid var(--line)}
+.stats .k{font-family:"JetBrains Mono",monospace;font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);display:block}
+.stats .v{font-family:"JetBrains Mono",monospace;font-size:17px;font-weight:500;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.stats .v.acc{color:var(--accent-ink)}
+
+section{padding:40px 0;border-bottom:1px solid var(--line)}
+h2{font-size:clamp(21px,2.8vw,27px);font-weight:600;margin-bottom:12px}
+.prose{max-width:66ch}.prose p{margin:0 0 1em}.prose p:last-child{margin-bottom:0}
+.note{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--surface);
+  border-radius:0 9px 9px 0;padding:15px 19px;font-size:15px;color:var(--ink-2);max-width:78ch}
+.note b{color:var(--ink);font-weight:600}
+.note.warn{border-left-color:var(--c-static)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface);margin-top:16px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14.5px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line)}
+thead th{font-family:"Chivo",sans-serif;font-size:10.5px;font-weight:600;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--muted);background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:none}
+td.n{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+footer{padding:32px 0 50px;color:var(--muted);font-size:13px}
+</style>
+
+<header>
+  <div class="wrap">
+    <div class="kicker">SIH 2026 · PS 26053 · Live perception</div>
+    <h1>Drive 0001, Classified</h1>
+    <p class="dek">108 consecutive LiDAR sweeps down a street in Karlsruhe, each one run through the full pipeline — ground removal, clustering, PointNet classification — and colour-coded into the three categories the problem statement asks for.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="sim">
+    <div class="bar">
+      <button class="b play" id="play" aria-pressed="false">▶ play</button>
+      <span class="lbl">frame</span>
+      <input type="range" id="scrub" min="0" value="0" step="1">
+      <span class="val" id="fno">1 / 108</span>
+      <span class="lbl">speed</span>
+      <button class="b sp" data-sp="0.5">0.5×</button>
+      <button class="b sp" data-sp="1" aria-pressed="true">1×</button>
+      <button class="b sp" data-sp="2">2×</button>
+      <button class="b" id="reset">reset view</button>
+      <button class="b" id="boxes" aria-pressed="true">boxes</button>
+    </div>
+    <div class="stage">
+      <canvas id="cv"></canvas>
+      <div class="hint">drag · orbit&nbsp;&nbsp;scroll · zoom</div>
+      <div class="fovnote" id="fovnote"></div>
+    </div>
+    <div class="key" id="key"></div>
+    <div class="stats" id="stats"></div>
+  </div>
+</div>
+
+<section>
+  <div class="wrap">
+    <h2>What you are looking at</h2>
+    <div class="prose">
+      <p>Every frame is processed from scratch — nothing is tracked or carried between frames. The sensor is a Velodyne HDL-64E at 10 Hz; playback at 1× is real time.</p>
+      <p>The three colour groups map directly onto the problem statement's categories. <b>Terrain</b> is the ground surface recovered by per-sector plane fitting. <b>Static obstacle</b> is any non-ground cluster the network classifies as background — walls, poles, vegetation, parked structures. <b>Car, Pedestrian and Cyclist</b> are the dynamic-capable classes, drawn with their predicted 3D boxes.</p>
+    </div>
+    <div class="note warn" style="margin-top:20px">
+      <b>The greyed-out region is deliberate.</b> KITTI only annotates inside the camera frustum, so the model was only ever trained on clusters within roughly ±40° of forward. Classifying the full 360° would be running it out of distribution and presenting the output as if it were trustworthy. Ground removal runs everywhere; clustering and classification run only where the model is valid, and everything else is drawn as unscored.
+    </div>
+    <div class="note" style="margin-top:16px">
+      <b>"Dynamic" here means class, not motion.</b> A parked car is coloured as a Car. Distinguishing <em>moving</em> from <em>stationary</em> requires comparing consecutive ego-motion-compensated sweeps — the residual-image approach from LiDAR-MOS — which this pipeline does not yet do. The data to build it is present: this drive has 108 consecutive frames with GPS/IMU poses.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Timing, measured</h2>
+    <div class="prose"><p>Mean over all 108 frames, on a 4&nbsp;GB GTX 1650 processing the full 121,000-point sweep.</p></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Stage</th><th class="n">ms / frame</th><th>Device</th><th>Note</th></tr></thead>
+        <tbody id="ttab"></tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:18px">
+      <b>Ground removal is the bottleneck, and it is on the CPU.</b> It runs over all 121,000 points including the 360° region the model never scores; restricting it to the working field of view, or overlapping it with the previous frame's inference, would remove most of it. The canonicalisation that this whole project is about costs <b>0.068 ms</b> — it does not appear in this table because it rounds to zero.
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    KITTI raw, 2011_09_26_drive_0001, 108 sweeps · Velodyne HDL-64E ·
+    model <span class="mono" id="mdl"></span><br>
+    Points are subsampled for display; every dynamic-class point is kept, the remainder sampled to fill the budget.
+  </div>
+</footer>
+
+<script>
+(function(){
+"use strict";
+var D = __SIM__;
+
+/* ---------- decode ---------- */
+function unb64(s){var b=atob(s),n=b.length,u=new Uint8Array(n);
+  for(var i=0;i<n;i++)u[i]=b.charCodeAt(i);return u;}
+var raw=unb64(D.blob), Q=D.quant, F=D.frames, NF=F.length;
+var off=[],p=0;
+for(var i=0;i<NF;i++){off.push(p);p+=F[i].n*7;}
+
+function framePts(i){
+  var n=F[i].n, base=off[i];
+  var xyz=new Int16Array(raw.buffer, base, n*3);
+  var cls=new Uint8Array(raw.buffer, base+n*6, n);
+  return {n:n,xyz:xyz,cls:cls};
+}
+
+var CLS=D.classes;
+var CVAR=["--c-unscored","--c-terrain","--c-static","--c-car","--c-ped","--c-cyc"];
+var on=[true,true,true,true,true,true];
+var S=function(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();};
+function rgb(h){var m=/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(h);
+  return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[128,128,128];}
+
+/* ---------- camera ---------- */
+var cam={yaw:-1.15,pitch:0.42,dist:46,focal:640};
+var DEF={yaw:-1.15,pitch:0.42,dist:46,focal:640};
+var cv=document.getElementById("cv"),ctx=cv.getContext("2d",{alpha:false});
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2),img=null,buf=null,zb=null;
+
+function resize(){
+  var w=cv.parentElement.clientWidth;
+  var h=Math.round(Math.max(400,Math.min(620,w*0.55)));
+  cv.style.height=h+"px";
+  W=Math.round(w*DPR);H=Math.round(h*DPR);
+  cv.width=W;cv.height=H;
+  img=ctx.createImageData(W,H);buf=new Uint32Array(img.data.buffer);
+  zb=new Float32Array(W*H);
+  draw();
+}
+
+var cur=0;
+function draw(){
+  if(!buf)return;
+  var bg=rgb(S("--void"));
+  var bgv=(255<<24)|(bg[2]<<16)|(bg[1]<<8)|bg[0];
+  buf.fill(bgv);zb.fill(1e9);
+
+  var cols=CVAR.map(function(v){return rgb(S(v));});
+  var ca=Math.cos(cam.yaw),sa=Math.sin(cam.yaw);
+  var cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  var f=cam.focal*DPR,cx=W>>1,cy=H>>1;
+
+  var fr=framePts(cur),n=fr.n,xyz=fr.xyz,cls=fr.cls;
+  for(var i=0;i<n;i++){
+    var c=cls[i];
+    if(!on[c])continue;
+    var x=xyz[i*3]/Q,y=xyz[i*3+1]/Q,z=xyz[i*3+2]/Q;
+    var X=x*ca-y*sa,Y=x*sa+y*ca;
+    var Y2=Y*cp-z*sp,Z2=Y*sp+z*cp;
+    var d=Y2+cam.dist;
+    if(d<0.6)continue;
+    var sx=(cx+f*X/d)|0,sy=(cy-f*Z2/d)|0;
+    var sz=c>=3?2:1;                       // dynamic classes drawn larger
+    if(sx<0||sy<0||sx>=W-sz||sy>=H-sz)continue;
+    var col=cols[c];
+    var v=(255<<24)|(col[2]<<16)|(col[1]<<8)|col[0];
+    for(var dy=0;dy<sz;dy++){
+      var row=(sy+dy)*W+sx;
+      for(var dx=0;dx<sz;dx++){
+        var k=row+dx;
+        if(d<zb[k]){zb[k]=d;buf[k]=v;}
+      }
+    }
+  }
+  ctx.putImageData(img,0,0);
+
+  if(showBoxes)drawBoxes(ca,sa,cp,sp,f,cx,cy);
+  drawStats();
+}
+
+function proj(x,y,z,ca,sa,cp,sp,f,cx,cy){
+  var X=x*ca-y*sa,Y=x*sa+y*ca;
+  var Y2=Y*cp-z*sp,Z2=Y*sp+z*cp;
+  var d=Y2+cam.dist;
+  if(d<0.6)return null;
+  return [cx+f*X/d,cy-f*Z2/d];
+}
+var EDGES=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+function drawBoxes(ca,sa,cp,sp,f,cx,cy){
+  var dets=F[cur].d||[];
+  ctx.lineWidth=2*DPR;ctx.lineJoin="round";
+  dets.forEach(function(o){
+    var ci=o.c+2;
+    if(!on[ci])return;
+    var b=o.b,l=b[3],w=b[4],h=b[5],yw=b[6];
+    var cc=Math.cos(yw),ss=Math.sin(yw);
+    var pts=[];
+    [[1,1,-1],[1,-1,-1],[-1,-1,-1],[-1,1,-1],
+     [1,1,1],[1,-1,1],[-1,-1,1],[-1,1,1]].forEach(function(s){
+      var lx=s[0]*l/2,ly=s[1]*w/2,lz=s[2]*h/2;
+      pts.push(proj(b[0]+lx*cc-ly*ss, b[1]+lx*ss+ly*cc, b[2]+lz,
+                    ca,sa,cp,sp,f,cx,cy));
+    });
+    if(pts.some(function(p){return !p;}))return;
+    ctx.strokeStyle=S(CVAR[ci]);
+    ctx.beginPath();
+    EDGES.forEach(function(e){
+      ctx.moveTo(pts[e[0]][0],pts[e[0]][1]);
+      ctx.lineTo(pts[e[1]][0],pts[e[1]][1]);
+    });
+    ctx.stroke();
+    // label above the box top face
+    var top=pts[4];
+    ctx.fillStyle=S(CVAR[ci]);
+    ctx.font=(11*DPR)+"px 'JetBrains Mono', monospace";
+    ctx.fillText(CLS[ci]+" "+o.s.toFixed(2), top[0]+6*DPR, top[1]-6*DPR);
+  });
+}
+
+function drawStats(){
+  var fr=F[cur],t=fr.t,tot=t.ground+t.cluster+t.infer;
+  var counts=[0,0,0,0,0,0], pf=framePts(cur);
+  for(var i=0;i<pf.n;i++)counts[pf.cls[i]]++;
+  var nd={};
+  (fr.d||[]).forEach(function(o){nd[CLS[o.c+2]]=(nd[CLS[o.c+2]]||0)+1;});
+  var det=Object.keys(nd).map(function(k){return nd[k]+" "+k;}).join(", ")||"none";
+  document.getElementById("stats").innerHTML=
+    cell("raw points",fr.raw.toLocaleString())+
+    cell("clusters",fr.cl)+
+    cell("detections",(fr.d||[]).length,"acc")+
+    cell("ground ms",t.ground.toFixed(1))+
+    cell("cluster ms",t.cluster.toFixed(1))+
+    cell("infer ms",t.infer.toFixed(1))+
+    cell("total ms",tot.toFixed(1),"acc")+
+    cell("fps",(1000/tot).toFixed(1),"acc")+
+    '<div style="grid-column:1/-1;font-size:13.5px;color:var(--ink-2);'+
+    'padding-top:8px;border-top:1px dashed var(--line-2)">detected: '+det+'</div>';
+}
+function cell(k,v,c){return '<div><span class="k">'+k+'</span>'+
+  '<span class="v'+(c?" "+c:"")+'">'+v+'</span></div>';}
+
+/* ---------- interaction ---------- */
+var drag=false,lx=0,ly=0;
+cv.addEventListener("pointerdown",function(e){drag=true;lx=e.clientX;ly=e.clientY;
+  cv.classList.add("drag");cv.setPointerCapture(e.pointerId);});
+cv.addEventListener("pointermove",function(e){
+  if(!drag)return;
+  cam.yaw+=(e.clientX-lx)*0.006;
+  cam.pitch=Math.max(-0.2,Math.min(1.4,cam.pitch+(e.clientY-ly)*0.005));
+  lx=e.clientX;ly=e.clientY;draw();});
+cv.addEventListener("pointerup",function(){drag=false;cv.classList.remove("drag");});
+cv.addEventListener("wheel",function(e){e.preventDefault();
+  cam.dist=Math.max(8,Math.min(140,cam.dist*(e.deltaY>0?1.1:0.91)));draw();},{passive:false});
+
+/* ---------- playback ---------- */
+var playing=false,speed=1,timer=null,showBoxes=true;
+var scrub=document.getElementById("scrub");
+scrub.max=NF-1;
+function setFrame(i){
+  cur=Math.max(0,Math.min(NF-1,i));
+  scrub.value=cur;
+  document.getElementById("fno").textContent=(cur+1)+" / "+NF;
+  draw();
+}
+function tick(){
+  if(!playing)return;
+  setFrame(cur+1>=NF?0:cur+1);
+  timer=setTimeout(tick,100/speed);          // KITTI is 10 Hz
+}
+document.getElementById("play").addEventListener("click",function(){
+  playing=!playing;
+  this.setAttribute("aria-pressed",playing?"true":"false");
+  this.textContent=playing?"❚❚ pause":"▶ play";
+  if(playing)tick();else clearTimeout(timer);
+});
+scrub.addEventListener("input",function(e){
+  playing=false;clearTimeout(timer);
+  var p=document.getElementById("play");
+  p.setAttribute("aria-pressed","false");p.textContent="▶ play";
+  setFrame(+e.target.value);
+});
+document.querySelectorAll("button.b.sp").forEach(function(b){
+  b.addEventListener("click",function(){
+    speed=+b.dataset.sp;
+    document.querySelectorAll("button.b.sp").forEach(function(o){
+      o.setAttribute("aria-pressed",o===b?"true":"false");});
+  });
+});
+document.getElementById("reset").addEventListener("click",function(){
+  cam.yaw=DEF.yaw;cam.pitch=DEF.pitch;cam.dist=DEF.dist;draw();});
+document.getElementById("boxes").addEventListener("click",function(){
+  showBoxes=!showBoxes;this.setAttribute("aria-pressed",showBoxes?"true":"false");draw();});
+
+/* ---------- legend / class toggles ---------- */
+(function(){
+  var k=document.getElementById("key");
+  CLS.forEach(function(name,i){
+    var b=document.createElement("button");
+    b.setAttribute("aria-pressed","true");
+    b.innerHTML="<i style='background:var("+CVAR[i]+")'></i>"+name;
+    b.addEventListener("click",function(){
+      on[i]=!on[i];b.setAttribute("aria-pressed",on[i]?"true":"false");draw();});
+    k.appendChild(b);
+  });
+})();
+
+/* ---------- static copy ---------- */
+document.getElementById("fovnote").innerHTML=
+  "classified within ±"+D.fov+"° of forward<br>outside: ground only, unscored";
+document.getElementById("mdl").textContent=
+  D.model.canon+" · "+(D.model.params/1e6).toFixed(2)+"M params · F1 "+D.model.f1+
+  " · centre "+D.model.ctr_err+" m · heading "+D.model.yaw_err+"°";
+(function(){
+  var g=0,c=0,f=0;
+  F.forEach(function(x){g+=x.t.ground;c+=x.t.cluster;f+=x.t.infer;});
+  var n=F.length,rows=[
+    ["ground removal",g/n,"CPU (numba)","per-sector plane fit over all 121k points"],
+    ["clustering",c/n,"CPU (numba)","voxel connected components"],
+    ["canonicalisation",0.068,"CPU (numba)","closed-form 2×2 eigendecomposition"],
+    ["PointNet inference",f/n,"GPU","~26 clusters × 256 points per frame"]];
+  var tot=(g+c+f)/n;
+  var h="";
+  rows.forEach(function(r){
+    h+="<tr><td>"+r[0]+"</td><td class='n'>"+r[1].toFixed(2)+
+       "</td><td>"+r[2]+"</td><td>"+r[3]+"</td></tr>";});
+  h+="<tr><td><b>total</b></td><td class='n'><b>"+tot.toFixed(1)+
+     "</b></td><td>—</td><td><b>"+(1000/tot).toFixed(1)+" FPS</b></td></tr>";
+  document.getElementById("ttab").innerHTML=h;
+})();
+
+window.addEventListener("resize",resize);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+new MutationObserver(draw).observe(document.documentElement,
+  {attributes:true,attributeFilter:["data-theme"]});
+resize();setFrame(0);
+})();
+</script>

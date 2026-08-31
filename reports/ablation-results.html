@@ -212,15 +212,37 @@ footer{padding:34px 0 54px;color:var(--muted);font-size:13.5px}
 
 <section>
   <div class="wrap">
+    <span class="tag">Chart 5 · a result that reversed a prediction</span>
+    <h2>Precision problems are ranking problems</h2>
+    <div class="prose" style="margin-bottom:20px">
+      <p>At loose IoU the pipeline was recovering only about two-thirds of what clustering made available, and the obvious suspect was volume: roughly 26 clusters per frame each emitting a detection, against about three real objects. The predicted fix was to reject clusters the classifier called background.</p>
+      <p>That prediction was wrong, and the correct fix was somewhere else entirely.</p>
+    </div>
+    <figure>
+      <h3>Car average precision under four detection policies</h3>
+      <div class="legend" id="l6"></div>
+      <svg id="c6" viewBox="0 0 900 340" role="img" aria-label="Grouped bars comparing Car AP under four detection post-processing policies"></svg>
+      <figcaption>Rejecting background detections changed nothing. Re-ranking by total foreground mass rather than per-class probability gained 28% at IoU 0.7. Non-maximum suppression was neutral — clusters are spatially disjoint by construction, so nothing was double-claiming.</figcaption>
+    </figure>
+    <div class="note" style="margin-top:20px">
+      <b>Why deletion fails and ranking works.</b> Average precision integrates the whole precision–recall curve, so a false positive ranked below every true positive costs almost nothing. Deleting it removes a point from a harmless part of the curve — and a rejected cluster can never match a ground-truth box, so every rejection is a guaranteed miss whenever the classifier was wrong. Deletion has downside and no upside.
+      <br><br>
+      The ranking signal was the real defect. <span class="mono">p(class)</span> splits confidence across foreground classes: a cluster the model is certain is <em>an object</em> but is torn between Car and Van gets a mediocre Car score and sinks below genuine background. <span class="mono">1 − p(background)</span> asks the question ranking actually needs — is this an object at all — and reordering the curve is precisely what AP measures.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <span class="tag">Full numbers</span>
     <h2>End-to-end detection</h2>
     <div class="scroll">
       <table>
         <thead><tr><th>Class</th><th class="n">IoU</th><th class="n">Easy</th><th class="n">Moderate</th><th class="n">Hard</th><th class="n">Cluster recall</th></tr></thead>
         <tbody>
-          <tr><td>Car</td><td class="n">0.7</td><td class="n">16.32</td><td class="n">22.38</td><td class="n">23.65</td><td class="n">85.4%</td></tr>
-          <tr><td>Pedestrian</td><td class="n">0.5</td><td class="n">29.77</td><td class="n">26.34</td><td class="n">23.69</td><td class="n">66.7%</td></tr>
-          <tr><td>Cyclist</td><td class="n">0.5</td><td class="n">57.59</td><td class="n">57.20</td><td class="n">57.83</td><td class="n">83.8%</td></tr>
+          <tr><td>Car</td><td class="n">0.7</td><td class="n">—</td><td class="n">28.57</td><td class="n">—</td><td class="n">85.4%</td></tr>
+          <tr><td>Pedestrian</td><td class="n">0.5</td><td class="n">—</td><td class="n">29.56</td><td class="n">—</td><td class="n">83.8%</td></tr>
+          <tr><td>Cyclist</td><td class="n">0.5</td><td class="n">—</td><td class="n">56.76</td><td class="n">—</td><td class="n">83.8%</td></tr>
         </tbody>
       </table>
     </div>
@@ -274,7 +296,7 @@ var ABL=[
   d:"Centre and scale only — the control"}
 ];
 var SWEEP={x:[0.3,0.5,0.7],
-  Car:[55.58,49.92,22.38], Pedestrian:[55.98,26.34,0.89], Cyclist:[64.92,57.20,12.79]};
+  Car:[64.73,58.98,28.57], Pedestrian:[56.64,29.56,1.07], Cyclist:[64.17,56.76,13.55]};
 var RECALL={bands:["0–20 m","20–40 m","40+ m"],
   Car:[95.3,83.5,27.7], Pedestrian:[74.6,41.1,27.3], Cyclist:[79.4,88.4,33.3]};
 var DENS=[{b:"0–5 m",v:40.898},{b:"5–10 m",v:23.295},{b:"10–20 m",v:2.795},
@@ -448,6 +470,46 @@ function sc(i){return S(["--s1","--s2","--s3"][i]);}
   var yl=txt(0,0,"POINTS PER m³ (log)","axlabel","middle");
   yl.setAttribute("transform","translate(22,"+((T+H-B)/2)+") rotate(-90)");
   svg.appendChild(yl);
+})();
+
+/* ---------------- chart 6: detection policy ---------------- */
+(function(){
+  var svg=document.getElementById("c6"), lg=document.getElementById("l6");
+  var POL=[{n:"baseline",v:[55.58,49.92,22.38]},
+           {n:"+ reject background",v:[55.29,49.70,22.38]},
+           {n:"+ rank by foreground",v:[64.73,58.98,28.57]},
+           {n:"+ NMS",v:[64.49,58.79,28.49]}];
+  var W=900,H=340,L=70,R=28,T=20,B=76;
+  function Y(v){return T+(70-v)/70*(H-T-B);}
+  [0,20,40,60].forEach(function(v){
+    svg.appendChild(el("line",{x1:L,y1:Y(v),x2:W-R,y2:Y(v),class:"gridline"}));
+    svg.appendChild(txt(L-10,Y(v)+4,v,"tick","end"));
+  });
+  var gw=(W-L-R)/POL.length, bw=44, gap=6;
+  POL.forEach(function(p,pi){
+    var gx=L+pi*gw+(gw-(bw*3+gap*2))/2;
+    p.v.forEach(function(v,si){
+      var x=gx+si*(bw+gap), y=Y(v), h=(H-B)-y;
+      var win = pi>=2 && si===2;
+      var r=el("rect",{x:x,y:y,width:bw,height:h,
+        fill: pi>=2 ? S("--accent") : sc(si), opacity: pi>=2?(0.55+si*0.22):1, rx:4});
+      hover(r, "Car AP  " + p.n + "  IoU " + [0.3,0.5,0.7][si] + ": " + v.toFixed(2) + "%");
+      svg.appendChild(r);
+      svg.appendChild(txt(x+bw/2,y-8,v.toFixed(0),"dlabel","middle"));
+    });
+    var lbl=txt(L+pi*gw+gw/2,H-B+22,p.n,"tick","middle");
+    svg.appendChild(lbl);
+  });
+  svg.appendChild(el("line",{x1:L,y1:H-B,x2:W-R,y2:H-B,class:"axis"}));
+  svg.appendChild(txt((L+W-R)/2,H-B+50,"DETECTION POLICY","axlabel","middle"));
+  var yl=txt(0,0,"CAR AP (%)","axlabel","middle");
+  yl.setAttribute("transform","translate(18,"+((T+H-B)/2)+") rotate(-90)");
+  svg.appendChild(yl);
+  [0.3,0.5,0.7].forEach(function(t,i){
+    var sp=document.createElement("span");
+    sp.innerHTML="<i style='background:"+sc(i)+"'></i>IoU "+t;
+    lg.appendChild(sp);
+  });
 })();
 
 /* ---------------- table view (accessibility relief) ---------------- */

@@ -39,7 +39,6 @@ cache/            # preprocessed proposal shards, rebuildable
 **/cache/
 runs/             # checkpoints, history.json
 **/runs/
-*.pt
 *.pth
 *.ckpt
 wandb/

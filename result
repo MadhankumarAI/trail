@@ -663,3 +663,68 @@ frames: 100%|██████████████████████�
   These are end-to-end numbers: an object lost by clustering counts
   as a miss here, unlike the training F1.
 
+
+
+
+
+
+6 files changed, 994 insertions(+), 8 deletions(-)
+ create mode 100644 Cheaper Than T-Net_files/css2
+ create mode 100644 reports/ablation-results.html
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                55.58       49.92       22.38
+  Pedestrian         55.98       26.34        0.89
+  Cyclist            64.92       57.20       12.79
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                55.29       49.70       22.38
+  Pedestrian         53.76       25.90        0.89
+  Cyclist            64.92       57.20       12.79
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                64.44       58.76       28.57
+  Pedestrian         54.49       29.17        1.07
+  Cyclist            64.17       56.76       13.55
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                64.49       58.79       28.49
+  Pedestrian         54.49       29.17        1.07
+  Cyclist            64.17       56.76       13.55
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
+
