@@ -68,12 +68,13 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   <input type="range" id="scrub" min="0" value="0">
   <span id="fno" style="color:var(--dim);font-variant-numeric:tabular-nums"></span>
   <span class="seg">view
-    <button id="v_top" class="on">top-down</button><button id="v_3d">3D</button>
+    <button id="v_top" class="on">2.5D</button><button id="v_3d">3D</button>
   </span>
   <span class="seg" id="exagwrap">height &times;
     <button id="x1">1</button><button id="x8" class="on">8</button
     ><button id="x20">20</button><button id="x50">50</button>
   </span>
+  <label><input type="checkbox" id="relief" checked> relief</label>
   <label><input type="checkbox" id="height"> shade by height</label>
   <label><input type="checkbox" id="rings" checked> range rings</label>
   <div class="key">
@@ -181,6 +182,38 @@ function cells(which, k) {
 }
 
 const COL = ['#2ea043', '#d29922', '#da3633', '#30363d'];
+// same palette as RGB, so relief shading can scale it per cell
+const RGB = [[46, 160, 67], [210, 153, 34], [218, 54, 51], [48, 54, 61]];
+
+// RELIEF SHADING -- this is the 2.5D way to show elevation.
+//
+// The surface is a height field: one z per column. That is enough to shade it
+// like terrain, which puts the elevation on screen without ever leaving 2D --
+// no camera, no projection, no depth sort, one pass over the cells.
+//
+// Because the true relief is about 1:76, the unexaggerated normal barely tilts
+// and the shading would be invisible. The gradient is therefore scaled by the
+// same stated exaggeration the 3D view uses; this is the standard GIS z-factor
+// and it changes only the picture, never a number.
+
+const LX = -0.55, LY = -0.55, LZ = 0.63;   // light from the upper left
+
+function heightIndex(C) {
+  const M = new Map();
+  for (let i = 0; i < C.n; i++) M.set(C.ix[i] * 65536 + C.iy[i], C.hz[i]);
+  return M;
+}
+
+function shadeOf(M, C, i) {
+  const x = C.ix[i], y = C.iy[i], h = C.hz[i];
+  const hx = M.get((x + 1) * 65536 + y), hy = M.get(x * 65536 + (y + 1));
+  // a missing neighbour means the edge of the mapped area, not a cliff
+  const gx = ((hx === undefined ? h : hx) - h) / D.qz / D.res * EXAG;
+  const gy = ((hy === undefined ? h : hy) - h) / D.qz / D.res * EXAG;
+  const inv = 1 / Math.sqrt(gx * gx + gy * gy + 1);
+  const d = (-gx * inv) * LX + (-gy * inv) * LY + inv * LZ;
+  return Math.max(0.25, Math.min(1.35, d + 0.30));
+}
 const c1 = document.getElementById('c1'), c2 = document.getElementById('c2');
 const g1 = c1.getContext('2d'), g2 = c2.getContext('2d');
 const SZ = c1.width, HALF = D.rmax, SC = SZ / (2 * HALF);
@@ -262,11 +295,23 @@ function draw(ctx, C, byHeight, showRings) {
   }
   const span = Math.max(hi - lo, 0.5);
 
+  const relief = document.getElementById('relief').checked;
+  const M = relief ? heightIndex(C) : null;
+
   for (let i = 0; i < C.n; i++) {
     // vehicle frame: x forward, y left. screen: x up, y left.
     const x = C.ix[i] * D.res, y = C.iy[i] * D.res;
     const sx = SZ / 2 - y * SC, sy = SZ / 2 - x * SC;
-    ctx.fillStyle = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : COL[C.k[i]];
+    if (byHeight) {
+      ctx.fillStyle = ramp((C.hz[i] / D.qz - lo) / span);
+    } else if (relief) {
+      const f = shadeOf(M, C, i), c = RGB[C.k[i]];
+      ctx.fillStyle = 'rgb(' + Math.round(Math.min(255, c[0] * f)) + ',' +
+                               Math.round(Math.min(255, c[1] * f)) + ',' +
+                               Math.round(Math.min(255, c[2] * f)) + ')';
+    } else {
+      ctx.fillStyle = COL[C.k[i]];
+    }
     ctx.fillRect(sx - px / 2, sy - px / 2, px, px);
   }
 
@@ -371,6 +416,7 @@ const btn = document.getElementById('play');
 function go(k) { cur = k; scrub.value = k; show(k); }
 scrub.oninput = () => go(+scrub.value);
 document.getElementById('height').onchange = () => show(cur);
+document.getElementById('relief').onchange = () => show(cur);
 document.getElementById('rings').onchange = () => show(cur);
 btn.onclick = () => {
   if (timer) { clearInterval(timer); timer = null; btn.textContent = 'Play';

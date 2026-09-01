@@ -101,6 +101,32 @@ for (let k = 0; k < D.frames.length; k++) {
   tot.s += A.n; tot.a += B.n;
 }
 
+// --- cost of each render path -------------------------------------------
+// The claim is that 2.5D relief shading is cheaper than a 3D projection, so
+// measure it rather than assert it. Same frames, same cells, both panels.
+function timeMode(vid, label) {
+  ids[vid].onclick();
+  ids['height'].checked = false;
+  globalThis.__show(0);                      // warm up
+  const t0 = process.hrtime.bigint();
+  for (let rep = 0; rep < 5; rep++)
+    for (let k = 0; k < D.frames.length; k++) globalThis.__show(k);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6 / (5 * D.frames.length);
+  console.log(`  ${label.padEnd(22)} ${ms.toFixed(2)} ms / frame (both panels)`);
+  return ms;
+}
+console.log('render cost:');
+ids['relief'].checked = false;
+const tFlat = timeMode('v_top', '2.5D flat');
+ids['relief'].checked = true;
+const tRelief = timeMode('v_top', '2.5D + relief');
+const t3d = timeMode('v_3d', '3D projected');
+console.log(`  -> relief costs ${(tRelief / tFlat).toFixed(2)}x flat, ` +
+            `3D costs ${(t3d / tRelief).toFixed(2)}x relief`);
+ids['relief'].checked = true;
+ids['v_top'].onclick();
+console.log('');
+
 const oddS = D.frames.filter(f => f.ns % 2).length;
 const oddA = D.frames.filter(f => f.na % 2).length;
 console.log(`frames        : ${D.frames.length}`);
