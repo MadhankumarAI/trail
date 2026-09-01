@@ -33,21 +33,26 @@ output drops into existing tooling:
     variance                    elevation variance (elevation_mapping)
     n_observations              how many returns support the cell
     traversability              0..1, 1 = freely traversable
-    traversability_slope        per-criterion sublayers, as
-    traversability_step         traversability_estimation publishes them
-    traversability_roughness
+    traversability_slope        per-criterion sublayers, named after the
+    traversability_step         criteria grid_map's own demo chain combines
+    traversability_roughness    (slope and roughness), plus step
     obstacle_height             metres a static obstacle stands above ground
 
-The traversability convention is inverted from our cost, and the mapping is
-chosen so the two thresholds coincide exactly:
+The traversability convention is inverted from our cost. grid_map's own demo
+filter chain (grid_map_demos/config/filters_demo_filter_chain.yaml) defines it
+as
 
-    traversability = clip(1 - score/2, 0, 1)
+    0.5 * (1 - slope/0.6) + 0.5 * (1 - roughness/0.1)
 
-Our score is the worst normalised violation, so score = 1 is exactly the
-vehicle limit; that maps to traversability 0.5, which is precisely
-traversability_estimation's default `traversability_threshold`. A consumer
-using stock parameters therefore agrees with us about what is drivable,
-without being told anything.
+clamped to [0, 1] -- that is, each criterion enters as `1 - x/limit`, reaching
+0 exactly at its limit. Ours uses the same per-criterion form:
+
+    traversability = clip(1 - score, 0, 1)
+
+with one deliberate difference. They combine criteria by weighted MEAN; our
+score is the worst normalised violation, a MAX. The mean lets a gentle slope
+average away lethal roughness, which for a ground vehicle is the wrong
+direction to be wrong in. Both agree at the limit: score 1.0 -> 0.0.
 
 GEOMETRY, TAKEN FROM GridMapMath.cpp
 ------------------------------------
@@ -78,10 +83,10 @@ LAYERS = (
 def cost_to_traversability(score):
     """Our cost (0 good, 1 = vehicle limit) -> grid_map's 0..1, 1 = best.
 
-    score 1.0 lands on 0.5, which is traversability_estimation's default
-    threshold, so a stock consumer draws the same line we do.
+    Matches the `1 - x/limit` form of grid_map's demo filter chain, so a cell
+    at the vehicle limit reports 0 exactly as theirs does.
     """
-    return np.clip(1.0 - 0.5 * np.asarray(score, float), 0.0, 1.0)
+    return np.clip(1.0 - np.asarray(score, float), 0.0, 1.0)
 
 
 class GridMap:
@@ -110,12 +115,32 @@ class GridMap:
 
     # ------------------------------------------------------------ geometry
     def index_from_position(self, x, y):
-        """(ix, iy) for world positions, and a mask of what is inside."""
-        ox = self.position[0] + 0.5 * self.length_x - 0.5 * self.resolution
-        oy = self.position[1] + 0.5 * self.length_y - 0.5 * self.resolution
-        ix = np.rint((ox - np.asarray(x, float)) / self.resolution).astype(int)
-        iy = np.rint((oy - np.asarray(y, float)) / self.resolution).astype(int)
-        ok = (ix >= 0) & (ix < self.n_x) & (iy >= 0) & (iy < self.n_y)
+        """(ix, iy) for world positions, and a mask of what is inside.
+
+        Transcribed from GridMapMath.cpp getIndexFromPosition, which does NOT
+        use the same offset as getPositionFromIndex -- a trap worth spelling
+        out. Position-from-index uses getVectorToFirstCell (0.5*L - 0.5*res,
+        the CENTRE of the first cell); index-from-position uses
+        getVectorToOrigin (0.5*L, the map EDGE) and then truncates on the cast
+        to int. Using the cell-centre offset with rounding agrees almost
+        everywhere and disagrees exactly on cell boundaries, which is the kind
+        of off-by-one that only shows up as a seam.
+        """
+        x = np.asarray(x, float)
+        y = np.asarray(y, float)
+        # indexVector = (position - 0.5*L - mapPosition) / res, then negated by
+        # transformMapFrameToBufferOrder and truncated by the cast to Index
+        vx = (x - 0.5 * self.length_x - self.position[0]) / self.resolution
+        vy = (y - 0.5 * self.length_y - self.position[1]) / self.resolution
+        ix = np.trunc(-vx).astype(int)
+        iy = np.trunc(-vy).astype(int)
+        # checkIfPositionWithinMap: the transformed position must be in
+        # [0, length), which makes the map (centre - L/2, centre + L/2]
+        ok = ((-vx * self.resolution >= 0.0)
+              & (-vx * self.resolution < self.length_x)
+              & (-vy * self.resolution >= 0.0)
+              & (-vy * self.resolution < self.length_y)
+              & (ix >= 0) & (ix < self.n_x) & (iy >= 0) & (iy < self.n_y))
         return ix, iy, ok
 
     def position_from_index(self, ix, iy):
@@ -134,8 +159,10 @@ class GridMap:
         the robot moves, and only genuinely new ground is blanked.
         """
         new_position = np.array(new_position, float)
-        shift = np.rint((new_position - self.position) /
-                        self.resolution).astype(int)
+        # getIndexShiftFromPositionShift rounds half AWAY from zero, not to
+        # even -- np.rint would disagree on exact half cells
+        v = (new_position - self.position) / self.resolution
+        shift = np.trunc(v + 0.5 * np.where(v > 0, 1.0, -1.0)).astype(int)
         if not shift.any():
             return np.zeros(2, int)
 
@@ -214,8 +241,14 @@ class GridMap:
             "layers": self.layer_names,
             "basic_layers": ["elevation"],
             "data": out_layers,
-            "outer_start_index": int(self.start[1]),
-            "inner_start_index": int(self.start[0]),
+            # GridMapRosConverter.cpp: outer_start_index = getStartIndex()(0),
+            # inner_start_index = getStartIndex()(1). The msg comments call
+            # them "row" and "column" start index respectively, which reads
+            # backwards against the data layout's dim labels; the code is the
+            # authority. move() here rolls the data instead of rotating a
+            # buffer origin, so both stay zero.
+            "outer_start_index": int(self.start[0]),
+            "inner_start_index": int(self.start[1]),
         }
 
     # ------------------------------------------------------------- memory
@@ -224,10 +257,40 @@ class GridMap:
         return self.n_x * self.n_y * len(self.layer_names) * 4
 
 
-def selftest():
-    """Round-trip the geometry against the corners.
+def _ref_index_from_position(px, py, length_x, length_y, pos_x, pos_y, res):
+    """GridMapMath.cpp getIndexFromPosition, transcribed one line at a time.
 
-    A mirrored map is the failure mode here, and it looks fine.
+    Deliberately scalar, ugly and literal. It exists only to disagree with the
+    vectorised version if that ever drifts, so it must not share any of its
+    reasoning -- the C++ is reproduced statement by statement:
+
+        getVectorToOrigin(offset, mapLength)        -> offset = 0.5 * length
+        indexVector = (position - offset - mapPosition) / resolution
+        index = transformMapFrameToBufferOrder(indexVector)   -> negate
+                then cast to int, which truncates
+    """
+    off_x, off_y = 0.5 * length_x, 0.5 * length_y
+    ivx = (px - off_x - pos_x) / res
+    ivy = (py - off_y - pos_y) / res
+    return int(-ivx), int(-ivy)          # int() truncates, as the C++ cast does
+
+
+def _ref_position_from_index(ix, iy, length_x, length_y, pos_x, pos_y, res):
+    """GridMapMath.cpp getPositionFromIndex, likewise literal.
+
+        getVectorToFirstCell(offset, ...)  -> 0.5 * length - 0.5 * resolution
+        position = mapPosition + offset + resolution * (-index)
+    """
+    off_x = 0.5 * length_x - 0.5 * res
+    off_y = 0.5 * length_y - 0.5 * res
+    return pos_x + off_x + res * (-ix), pos_y + off_y + res * (-iy)
+
+
+def selftest():
+    """Check the geometry against a literal transcription of the C++.
+
+    A mirrored or half-cell-shifted map is the failure mode here, and it looks
+    entirely fine on screen.
     """
     g = GridMap(20.0, 10.0, 0.5, position=(3.0, -1.0))
     assert (g.n_x, g.n_y) == (40, 20), (g.n_x, g.n_y)
@@ -242,11 +305,38 @@ def selftest():
     assert abs(px - (3.0 - 10.0 + 0.25)) < 1e-9, px
     assert abs(py - (-1.0 - 5.0 + 0.25)) < 1e-9, py
 
-    # round trip a scatter of positions
+    # agree with the transcribed C++ everywhere, including exactly on cell
+    # boundaries, which is where the old cell-centre-plus-rounding version
+    # silently differed by one
     rng = np.random.default_rng(0)
-    x = rng.uniform(-6.0, 12.0, 500)
-    y = rng.uniform(-5.0, 3.0, 500)
+    x = np.concatenate([rng.uniform(-8.0, 14.0, 4000),
+                        np.arange(-7.0, 13.0, 0.5),      # exact boundaries
+                        np.arange(-7.0, 13.0, 0.25)])    # exact centres
+    y = np.concatenate([rng.uniform(-7.0, 5.0, 4000),
+                        np.arange(-6.0, 4.0, 0.5)[:40],
+                        np.arange(-6.0, 4.0, 0.25)[:80]])
+    n = min(len(x), len(y))
+    x, y = x[:n], y[:n]
     ix, iy, ok = g.index_from_position(x, y)
+    bad = 0
+    for j in range(n):
+        rx, ry = _ref_index_from_position(x[j], y[j], g.length_x, g.length_y,
+                                          g.position[0], g.position[1],
+                                          g.resolution)
+        if (rx, ry) != (int(ix[j]), int(iy[j])):
+            bad += 1
+    assert bad == 0, f"{bad}/{n} indices disagree with the transcribed C++"
+
+    for j in range(0, n, 37):
+        if not ok[j]:
+            continue
+        rpx, rpy = _ref_position_from_index(ix[j], iy[j], g.length_x,
+                                            g.length_y, g.position[0],
+                                            g.position[1], g.resolution)
+        bx, by = g.position_from_index(ix[j], iy[j])
+        assert abs(rpx - bx) < 1e-9 and abs(rpy - by) < 1e-9
+
+    # and the recovered centre must be within half a cell of the query
     bx, by = g.position_from_index(ix[ok], iy[ok])
     assert np.abs(bx - x[ok]).max() <= g.resolution / 2 + 1e-9
     assert np.abs(by - y[ok]).max() <= g.resolution / 2 + 1e-9
@@ -277,9 +367,17 @@ def selftest():
     flat = g2.to_msg()["data"][0]["data"]
     assert flat[0] == 7.0 and flat[1] == 8.0, "not column-major"
 
-    assert abs(cost_to_traversability(1.0) - 0.5) < 1e-12
+    # start indices follow GridMapRosConverter, outer = axis 0
+    m2 = GridMap(2.0, 1.0, 0.5)
+    m2.start = np.array([3, 5])
+    msg2 = m2.to_msg()
+    assert msg2["outer_start_index"] == 3 and msg2["inner_start_index"] == 5
+
+    # grid_map's own filter chain form: 1 - x/limit, zero AT the limit
     assert cost_to_traversability(0.0) == 1.0
+    assert cost_to_traversability(1.0) == 0.0
     assert cost_to_traversability(2.0) == 0.0
+    assert abs(cost_to_traversability(0.25) - 0.75) < 1e-12
     print("gridmap selftest ok")
 
 
