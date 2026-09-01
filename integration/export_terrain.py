@@ -72,6 +72,59 @@ def pack(cx, cy, cls, h, rmax):
     return ix, iy, cls[keep].astype(np.uint8), hz
 
 
+def load_projection(calib_txt):
+    """P2 and Tr from an odometry calib file.
+
+    Odometry stores the projection matrices already rectified, so a velodyne
+    point reaches the image as P2 @ [Tr | 0 0 0 1] @ p. There is no separate
+    R0_rect here, unlike the object-detection split -- using the object-split
+    chain on odometry data silently misplaces every box.
+    """
+    P2 = Tr = None
+    for line in open(calib_txt):
+        k, _, v = line.partition(":")
+        if k == "P2":
+            P2 = np.array([float(t) for t in v.split()]).reshape(3, 4)
+        elif k == "Tr":
+            Tr = np.array([float(t) for t in v.split()]).reshape(3, 4)
+    if P2 is None or Tr is None:
+        return None
+    T = np.eye(4)
+    T[:3, :4] = Tr
+    return {"P2": P2, "T": T}
+
+
+def box_corners(b):
+    """The 8 corners of a box, in the same order corners_torch uses."""
+    cx, cy, cz, l, w, h, yaw = b
+    x = np.array([l, l, -l, -l, l, l, -l, -l]) / 2.0
+    y = np.array([w, -w, -w, w, w, -w, -w, w]) / 2.0
+    z = np.array([-h, -h, -h, -h, h, h, h, h]) / 2.0
+    c, s = np.cos(yaw), np.sin(yaw)
+    return np.stack([cx + x * c - y * s, cy + x * s + y * c, cz + z], 1)
+
+
+def project_boxes(boxes, proj, scale):
+    """Box corners in image pixels, or None where the box is behind the camera.
+
+    A box only partly in front of the camera cannot be drawn by projecting its
+    corners -- points behind the image plane come back mirrored -- so a box with
+    any corner at non-positive depth is dropped rather than drawn wrongly.
+    """
+    out = []
+    for bx in boxes:
+        pc = box_corners(bx["b"])
+        cam = (proj["T"] @ np.concatenate([pc, np.ones((8, 1))], 1).T).T
+        if (cam[:, 2] <= 0.5).any():
+            out.append(None)
+            continue
+        uvw = (proj["P2"] @ np.concatenate([cam[:, :3], np.ones((8, 1))], 1).T).T
+        uv = uvw[:, :2] / uvw[:, 2:3]
+        out.append([[round(float(u * scale), 1), round(float(v * scale), 1)]
+                    for u, v in uv])
+    return out
+
+
 def obstacle_cells(cells, T_w_velo, rmax):
     """Static-obstacle cells of the 2.5D map, as (ix, iy, height-above-ground).
 
@@ -141,6 +194,10 @@ def main():
     ap.add_argument("--rmax", type=float, default=50.0)
     ap.add_argument("--ckpt", type=Path, default=None,
                     help="detector checkpoint; adds the object layer")
+    ap.add_argument("--images", type=Path, default=None,
+                    help="directory of NNNNNN.png camera frames")
+    ap.add_argument("--image-width", type=int, default=560)
+    ap.add_argument("--image-quality", type=int, default=60)
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
 
@@ -169,6 +226,18 @@ def main():
               f"F1={ck.get('metrics', {}).get('f1_fg', 0):.4f}")
 
     T = A.load_poses(a.poses, a.calib)
+
+    proj = load_projection(a.calib) if a.images else None
+    img_scale, images, img_hw = 1.0, [], (0, 0)
+    if a.images:
+        from PIL import Image
+        probe = sorted(a.images.glob("*.png"))
+        if probe:
+            w0, h0 = Image.open(probe[0]).size
+            img_scale = a.image_width / w0
+            img_hw = (a.image_width, int(round(h0 * img_scale)))
+        print(f"camera  {len(probe)} frames, {img_hw[0]}x{img_hw[1]}"
+              f"{'  projection ok' if proj else '  NO CALIB - boxes not projected'}")
     files = sorted(a.cache.glob(f"{a.seq}_*.bin"))
     seq = [(int(f.stem.split("_")[1]), f) for f in files]
     seq = [(i, f) for i, f in seq if i <= a.max_frame]
@@ -214,10 +283,24 @@ def main():
         ba += ix2.tobytes() + iy2.tobytes() + z2.tobytes() + k2.tobytes()
         bo += ox.tobytes() + oy.tobytes() + oz.tobytes()
 
+        if a.images:
+            ip = a.images / f"{i:06d}.png"
+            if ip.exists():
+                from PIL import Image
+                import io as _io
+                im = Image.open(ip).convert("RGB").resize(img_hw, Image.BILINEAR)
+                buf = _io.BytesIO()
+                im.save(buf, "JPEG", quality=a.image_quality, optimize=True)
+                images.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+            else:
+                images.append("")
+
         frames.append({
             "i": i,
             "ns": int(len(ix1)), "na": int(len(ix2)), "no": int(len(ox)),
             "box": boxes,
+            "proj": (project_boxes(boxes, proj, img_scale)
+                     if (proj and a.images) else None),
             "dz": round(float(wm.dz) * 100, 2),
             "pose": [round(float(v), 3) for v in T[i][:3, 3]],
             "ss": summarise(cx1, cy1, c1, a.rmax, ahead=True),
@@ -242,6 +325,7 @@ def main():
         "obst": base64.b64encode(bytes(bo)).decode("ascii"),
         "objcls": ["", "Car", "Pedestrian", "Cyclist"],
         "hasobj": model is not None,
+        "cam": {"images": images, "w": img_hw[0], "h": img_hw[1]} if images else None,
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(payload))

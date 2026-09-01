@@ -223,15 +223,29 @@ def process(pts, cfg, model, device, tracker=None):
                     cls[idx_work[members[i]]] = top + CLS_OFFSET
                     ctr = Rc[i].T @ (dc[i] * scale[i]) + tc[i]
                     dims = np.exp(sl[i]) * ANCHORS[top]
+                    # Wrap to (-pi, pi]. The heading is a decoded bin plus a
+                    # residual minus the canonicalisation offset, none of which
+                    # is wrapped, so raw values reached 455 and -102 degrees.
+                    # Drawing is unaffected because sin and cos do not care,
+                    # but anything that compares, averages or thresholds a
+                    # heading does, and a tracker would be the first to break.
+                    yaw = float(yaw_p[i] - yaw_off[i])
+                    yaw = (yaw + np.pi) % (2 * np.pi) - np.pi
                     boxes.append({
                         "c": top, "s": round(score, 3),
                         "b": [round(float(v), 2) for v in
                               [ctr[0], ctr[1], ctr[2], dims[0], dims[1], dims[2],
-                               float(yaw_p[i] - yaw_off[i])]]})
+                               yaw]]})
 
     t.setdefault("cluster", 0.0)
     t.setdefault("infer", 0.0)
-    return cls, boxes, t, n_clusters
+    # Sector-level terrain, so the viewer can draw the decision surface as
+    # filled wedges. Drawing 5,000 sampled points out of 122,460 makes a
+    # perfectly coherent surface look speckled - the sparseness is the sampling,
+    # not the classifier.
+    sec_cls = terr["sector_cls"].astype(np.uint8)
+    sec_h = np.clip(np.round(terr["feat"]["h"] * 100), -32768, 32767).astype(np.int16)
+    return cls, boxes, t, n_clusters, sec_cls, sec_h
 
 
 def main() -> None:
@@ -285,13 +299,16 @@ def main() -> None:
     # each typed array is built once over its own contiguous run and per-frame
     # slices are taken in elements, where alignment cannot go wrong.
     cam_u, cam_v, cam_c = [], [], []
+    sec_c_all, sec_h_all = [], []
     images = []
     IMG_W = a.image_width
     tot = {"ground": 0.0, "terrain": 0.0, "cluster": 0.0, "infer": 0.0}
 
     for n, sp in enumerate(scans):
         pts = read_velodyne(sp)
-        cls, boxes, t, ncl = process(pts, cfg, model, cfg.device, tracker)
+        cls, boxes, t, ncl, sec_cls, sec_h = process(
+            pts, cfg, model, cfg.device, tracker)
+        sec_c_all.append(sec_cls); sec_h_all.append(sec_h)
         for k in tot:
             tot[k] += t[k]
 
@@ -345,6 +362,11 @@ def main() -> None:
         "classes": ["unscored", "drivable", "marginal", "non-drivable",
                     "static", "Car", "Pedestrian", "Cyclist"],
         "quant": 50,          # int16 units per metre
+        "grid": {"nr": 24, "na": 72, "R": 70.0,
+                 "cls": base64.b64encode(
+                     np.concatenate(sec_c_all).tobytes()).decode("ascii"),
+                 "h": base64.b64encode(
+                     np.concatenate(sec_h_all).tobytes()).decode("ascii")},
         "fov": FOV_DEG,
         "model": {"canon": cfg.canon,
                   "f1": round(float(ck.get("metrics", {}).get("f1_fg", 0)), 4),

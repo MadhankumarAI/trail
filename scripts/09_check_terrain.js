@@ -53,6 +53,13 @@ global.addEventListener = () => {};
 global.setInterval = () => 1;
 global.clearInterval = () => {};
 global.atob = s => Buffer.from(s, 'base64').toString('binary');
+// the camera panel builds an Image and paints on load; node has neither, so
+// the stub records the assignment and fires the handler synchronously
+global.Image = class {
+  constructor() { this.onload = null; this._src = ''; }
+  set src(v) { this._src = v; if (this.onload) this.onload(); }
+  get src() { return this._src; }
+};
 
 // --- run ----------------------------------------------------------------
 let D;

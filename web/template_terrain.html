@@ -107,6 +107,21 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   </div>
 </div>
 
+<div class="wrap" style="grid-template-columns:1fr" id="camwrap">
+  <div class="panel">
+    <div class="ptitle"><b>Left colour camera</b>
+      <span id="caminfo"></span></div>
+    <canvas id="cam" width="560" height="170"></canvas>
+    <div style="color:var(--dim);font-size:11px;margin-top:6px">
+      The same boxes, projected into the image through <code>P2</code> and
+      <code>Tr</code>. This is the check that matters: a box is right if it
+      lands on a car. The camera sees forward only, roughly 90&deg;, while the
+      map is the full 360&deg;, so boxes behind or beside the vehicle have
+      nothing to land on here and are simply absent.
+    </div>
+  </div>
+</div>
+
 <div class="wrap" style="grid-template-columns:1fr">
   <div class="panel">
     <div class="ptitle"><b>Cells carrying a verdict, by range</b>
@@ -119,6 +134,23 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
 </div>
 
 <div class="foot">
+  <b>The controls.</b>
+  <b>2.5D / 3D</b> — the same height field drawn two ways: straight down, or
+  projected and orbitable (drag it). 2.5D is the cheaper one.
+  <b>height &times;</b> — vertical exaggeration. The ground here has about
+  1 m of relief across 80 m, so at &times;1 it is a plane; raise it to see
+  camber and kerbs. It scales the picture only, never a number.
+  <b>objects</b> — the detector's output: static obstacles as pale columns
+  shaded by how far they stand above the ground, and Car / Pedestrian /
+  Cyclist as outlined boxes with a spur showing which way they face.
+  <b>relief</b> — hillshading. Each cell is lit according to the slope of the
+  height field around it, so ridges, kerbs and the road crown pick up light and
+  shade. Colour still says what the cell <i>is</i>; the shading says what shape
+  it is. Turn it off and the map goes back to flat colour.
+  <b>shade by height</b> — replaces the drivability colours with an elevation
+  ramp, low to high, with the scale in metres beside the legend.
+  <b>range rings</b> — 10, 20, 30 and 50 m circles about the vehicle.
+  <br><br>
   Top-down, vehicle at centre facing up, <span id="rr"></span> m half-width.
   Cells are <span id="cellsz"></span> m — a coarsening of the map's
   <span id="finesz"></span> m lattice, since a 5 cm cell holds one or two
@@ -446,6 +478,44 @@ function draw(ctx, C, byHeight, showRings) {
   ctx.closePath(); ctx.fill();
 }
 
+const camc = document.getElementById('cam');
+const camg = camc.getContext('2d');
+const camImg = new Image();
+let camReady = -1;
+
+function drawCam(k) {
+  if (!D.cam) { document.getElementById('camwrap').style.display = 'none'; return; }
+  camc.width = D.cam.w; camc.height = D.cam.h;
+  const src = D.cam.images[k];
+  if (!src) { camg.fillStyle = '#0b0e13'; camg.fillRect(0, 0, camc.width, camc.height); return; }
+  camImg.onload = () => paintCam(k);
+  if (camReady !== k) { camReady = k; camImg.src = 'data:image/jpeg;base64,' + src; }
+  else paintCam(k);
+}
+
+// the 12 edges of a box, as pairs into the 8-corner order corners_torch uses
+const EDGES = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],
+               [0,4],[1,5],[2,6],[3,7]];
+
+function paintCam(k) {
+  camg.drawImage(camImg, 0, 0, camc.width, camc.height);
+  const pr = D.frames[k].proj;
+  if (!pr || !OBJ) return;
+  camg.lineWidth = 1.6;
+  const bx = D.frames[k].box;
+  for (let i = 0; i < pr.length; i++) {
+    const q = pr[i];
+    if (!q) continue;
+    camg.strokeStyle = OBJCOL[bx[i].c] || '#fff';
+    camg.beginPath();
+    for (const e of EDGES) {
+      camg.moveTo(q[e[0]][0], q[e[0]][1]);
+      camg.lineTo(q[e[1]][0], q[e[1]][1]);
+    }
+    camg.stroke();
+  }
+}
+
 function drawBoxes(ctx, boxes) {
   if (!boxes) return;
   ctx.lineWidth = 2;
@@ -502,6 +572,13 @@ function show(k) {
   h += row('behind and beside', f.ssb, f.sab);
   tb.innerHTML = h;
 
+  drawCam(k);
+  if (D.cam) {
+    const pr = f.proj || [];
+    const shown = pr.filter(q => q).length;
+    document.getElementById('caminfo').textContent =
+      shown + ' of ' + (f.box ? f.box.length : 0) + ' boxes in view';
+  }
   const ek = document.getElementById('elevkey');
   const ok2 = document.getElementById('objkey');
   const bh = document.getElementById('height').checked;
