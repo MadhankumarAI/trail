@@ -78,6 +78,9 @@ class Config:
     # collapsed to 0.65. "sqrt_inv" is the gentler standard alternative.
     weight_mode: str = "sqrt_inv"         # inv | sqrt_inv | none
     weight_clip: float = 8.0
+    # Apply the same class weights to the BOX losses, not only to
+    # classification. Off reproduces the previous behaviour exactly.
+    weight_boxes: bool = True
     label_smoothing: float = 0.05
     ema_decay: float = 0.999              # 0 disables
 

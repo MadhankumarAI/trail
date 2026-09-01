@@ -37,7 +37,16 @@ from .kitti import CLASSES
 from .model import build
 
 
-def box_loss(out, batch, fg, corner_w: float = 1.0):
+def _wmean(per_sample, w):
+    """Weighted mean, or a plain one when no weights are supplied."""
+    if w is None:
+        return per_sample.mean()
+    if per_sample.dim() > 1:
+        per_sample = per_sample.mean(dim=1)
+    return (per_sample * w).sum() / w.sum().clamp_min(1e-6)
+
+
+def box_loss(out, batch, fg, corner_w: float = 1.0, w=None):
     """Direct centre/size/heading supervision, with corner loss as a REGULARISER.
 
     An earlier version replaced the direct centre and size terms with corner loss
@@ -58,13 +67,31 @@ def box_loss(out, batch, fg, corner_w: float = 1.0):
     if fg.sum() == 0:
         return z, z, z, z, z
 
-    l_ctr = F.smooth_l1_loss(out["center"][fg], batch["center"][fg])
-    l_size = F.smooth_l1_loss(out["size_log"][fg], batch["size_log"][fg])
+    # CLASS WEIGHTING, matching what classification already does.
+    #
+    # These were plain means over foreground, so the box gradient was shared
+    # out by sample count: Car is 76% of foreground and Cyclist 4%, and the
+    # model was therefore pushed hard to CLASSIFY a cyclist (weight 7.8) while
+    # getting almost no signal to FIT ITS BOX. Adding Van and Truck made the
+    # classification task harder without giving Cyclist any more box gradient,
+    # and Cyclist AP fell 56.76 -> 40.15 while its AP at IoU 0.3 barely moved
+    # -- the objects were still found, the boxes just stopped being tight.
+    #
+    # Note this is NOT about metric scale. size_log is a log ratio and the
+    # centre target is divided by the cluster scale, so both are already
+    # scale-free; a 10 m truck and a 2 m cyclist contribute comparable
+    # magnitudes. The imbalance is purely one of counts.
+    l_ctr = _wmean(F.smooth_l1_loss(out["center"][fg], batch["center"][fg],
+                                    reduction="none"), w)
+    l_size = _wmean(F.smooth_l1_loss(out["size_log"][fg], batch["size_log"][fg],
+                                     reduction="none"), w)
 
     hb_gt = batch["head_bin"][fg]
-    l_bin = F.cross_entropy(out["head_bin"][fg], hb_gt)
+    l_bin = _wmean(F.cross_entropy(out["head_bin"][fg], hb_gt,
+                                   reduction="none"), w)
     res_at_gt = out["head_res"][fg].gather(1, hb_gt.unsqueeze(1)).squeeze(1)
-    l_res = F.smooth_l1_loss(res_at_gt, batch["head_res"][fg])
+    l_res = _wmean(F.smooth_l1_loss(res_at_gt, batch["head_res"][fg],
+                                    reduction="none"), w)
 
     anchor = batch["anchor"][fg]
     scale = batch["scale"][fg].unsqueeze(1)
@@ -306,8 +333,12 @@ def train(cfg: Config) -> dict:
                 lcls = F.cross_entropy(out["logits"], y, weight=wt,
                                        label_smoothing=cfg.label_smoothing)
                 fg = y > 0
+                # the same per-class weights the classifier uses, so a rare
+                # class gets box gradient in proportion to how much we say we
+                # care about it rather than to how often it appears
+                bw = wt[y[fg]] if cfg.weight_boxes else None
                 lc, lsz, lbin, lres, lcorn = box_loss(out, b, fg,
-                                                      cfg.corner_loss_w)
+                                                      cfg.corner_loss_w, bw)
                 loss = lcls + cfg.box_loss_w * (lc + lsz + 0.5 * lbin + lres
                                                 + lcorn)
 
