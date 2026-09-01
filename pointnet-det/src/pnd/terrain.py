@@ -190,6 +190,12 @@ def drivability_score(feat: dict,
         ])
         with np.errstate(invalid="ignore"):
             sc = np.nanmedian(stack, axis=0).reshape(-1)
+        # A sector with no measurements must stay unknown. nanmedian happily
+        # fills it from its neighbours, which is interpolation presented as
+        # observation: a probe at 40 m with zero points in the sector came back
+        # "marginal" purely on borrowed values. For a drivability map that is the
+        # wrong default - absence of evidence is not evidence of a surface.
+        sc = np.where(feat["valid"], sc, np.nan)
     return sc
 
 
