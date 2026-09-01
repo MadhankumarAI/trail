@@ -53,7 +53,12 @@ DIFFICULTY = [
     ("moderate", 25, 1, 0.30),
     ("hard",     25, 2, 0.50),
 ]
-IOU_THRESH = {"Car": 0.7, "Pedestrian": 0.5, "Cyclist": 0.5}
+# KITTI's official thresholds: 0.7 for the car class, 0.5 for the two small
+# ones. Van and Truck are not in the official benchmark, so the choice is ours
+# -- 0.7, the same as Car, because they are vehicles of comparable size and
+# scoring them at 0.5 would flatter them against Car in the same table.
+IOU_THRESH = {"Car": 0.7, "Pedestrian": 0.5, "Cyclist": 0.5,
+              "Van": 0.7, "Truck": 0.7}
 
 
 # --------------------------------------------------------------------------- #

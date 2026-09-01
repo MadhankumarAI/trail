@@ -28,20 +28,40 @@ import numpy as np
 
 # Classes we actually train on. Everything else in the file is either merged
 # into these or excluded outright.
-CLASSES = ["Background", "Car", "Pedestrian", "Cyclist"]
+CLASSES = ["Background", "Car", "Pedestrian", "Cyclist", "Van", "Truck"]
 CLASS_TO_ID = {c: i for i, c in enumerate(CLASSES)}
 
-# KITTI's own type strings mapped onto ours. Van and Truck are *not* merged into
-# Car: the official benchmark does not, and merging inflates Car AP.
+# KITTI's own type strings mapped onto ours. Van and Truck stay SEPARATE from
+# Car -- the official benchmark does not merge them and doing so inflates Car
+# AP -- but they are now trained classes rather than ignored.
+#
+# They were previously in IGNORE_TYPES, which dropped every proposal that hit
+# one. That left the model with no way to say "van, not car": at inference a
+# van is a car-shaped object it has never been told about, so it fires Car and
+# scores a false positive against Car ground truth. Giving it the label is
+# expected to help Car AP, not just add two classes.
+#
+# Instance counts at truncation < 0.5, which is what governs whether a class
+# can be learned at all:
+#
+#     Car 26,351   Pedestrian 4,396   Van 2,636   Cyclist 1,559   Truck 1,006
+#     Misc 902     Tram 455           Person_sitting 203
+#
+# Van has MORE support than Cyclist, which already trains acceptably, and Truck
+# is comparable. Tram and Person_sitting are too thin to learn and stay ignored.
+# Misc is a catch-all of unrelated shapes, not a semantic class, so training it
+# would only teach the model to be uncertain.
 TYPE_MAP = {
     "Car": "Car",
     "Pedestrian": "Pedestrian",
     "Cyclist": "Cyclist",
+    "Van": "Van",
+    "Truck": "Truck",
 }
 # Present in the labels but never a training target. 'DontCare' marks regions
 # the annotators refused to label -- treating them as background poisons the
 # negative set, so proposals overlapping them are dropped, not labelled 0.
-IGNORE_TYPES = {"Van", "Truck", "Person_sitting", "Tram", "Misc", "DontCare"}
+IGNORE_TYPES = {"Person_sitting", "Tram", "Misc", "DontCare"}
 
 
 # --------------------------------------------------------------------------- #

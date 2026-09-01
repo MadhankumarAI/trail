@@ -166,6 +166,49 @@ def report(conf, ctr_err, yaw_err, per=None) -> dict:
             "per_class_f1": {c: float(f1[i]) for i, c in enumerate(CLASSES)}}
 
 
+def load_backbone(model, ckpt_path, device):
+    """Warm-start from a checkpoint whose head no longer fits.
+
+    Adding classes changes cls_head from (4, 256) to (6, 256), so a plain
+    load_state_dict refuses the whole file. Everything whose SHAPE still
+    matches is copied and the rest is left at its fresh initialisation, which
+    for this change is exactly the classifier head: the encoder has never seen
+    a class count and does not care.
+
+    Shape is the right test, not name. Renaming a layer and keeping its shape
+    would silently load the wrong tensor if we matched on name alone, so the
+    report below prints what was skipped and why -- a warm start that quietly
+    loaded nothing looks identical to one that worked until the loss curve
+    tells you otherwise, an epoch later.
+    """
+    ck = torch.load(ckpt_path, map_location=device, weights_only=False)
+    src = ck["model"]
+    dst = model.state_dict()
+
+    took, shape_skip, absent = [], [], []
+    for k, v in dst.items():
+        if k not in src:
+            absent.append(k)
+        elif src[k].shape != v.shape:
+            shape_skip.append((k, tuple(src[k].shape), tuple(v.shape)))
+        else:
+            dst[k] = src[k]
+            took.append(k)
+    model.load_state_dict(dst)
+
+    n_par = sum(dst[k].numel() for k in took)
+    print(f"warm start from {ckpt_path}")
+    print(f"  loaded      {len(took)} tensors, {n_par/1e6:.2f}M parameters")
+    for k, a, b in shape_skip:
+        print(f"  reinit      {k}  checkpoint {a} vs model {b}")
+    if absent:
+        print(f"  not in ckpt {len(absent)} tensors: {absent[:4]}"
+              f"{' ...' if len(absent) > 4 else ''}")
+    if not took:
+        raise SystemExit("warm start loaded nothing -- wrong checkpoint?")
+    return model
+
+
 def train(cfg: Config) -> dict:
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -200,6 +243,8 @@ def train(cfg: Config) -> dict:
 
     model = build(cfg).to(cfg.device)
     print(f"model params {model.n_params()/1e6:.2f}M")
+    if getattr(cfg, "init_from", None):
+        load_backbone(model, cfg.init_from, cfg.device)
     if cfg.compile:
         # Belt and braces: config.py already gates this on the Python version,
         # but a compile failure should degrade to eager, never abort a run that
@@ -312,6 +357,9 @@ def train(cfg: Config) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=Path, default=None)
+    ap.add_argument("--init-from", type=Path, default=None,
+                    help="warm-start from a checkpoint; tensors whose shape "
+                         "no longer matches are reinitialised")
     ap.add_argument("--canon", default=None)
     ap.add_argument("--epochs", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
@@ -331,6 +379,7 @@ def main() -> None:
         cfg.batch_size = a.batch_size
     if a.no_compile:
         cfg.compile = False
+    cfg.init_from = a.init_from
     train(cfg)
 
 

@@ -35,7 +35,7 @@ from tqdm import tqdm
 from .cluster import cluster_points
 from .config import Config
 from .ground import remove_ground
-from .kitti import (Calib, IGNORE_TYPES, points_in_box, read_labels,
+from .kitti import (CLASSES, Calib, IGNORE_TYPES, points_in_box, read_labels,
                     read_velodyne)
 
 
@@ -148,7 +148,7 @@ def build_cache(cfg: Config, shard_size: int = 500) -> None:
     buf_p, buf_m, buf_f = [], [], []
     shard, n_total = 0, 0
     t0 = time.time()
-    counts = np.zeros(4, np.int64)
+    counts = np.zeros(len(CLASSES), np.int64)
     n_empty = 0
 
     def flush():
@@ -184,8 +184,7 @@ def build_cache(cfg: Config, shard_size: int = 500) -> None:
           f"{1000*el/max(len(frames),1):.0f} ms/frame)")
     print(f"frames yielding nothing: {n_empty}")
     print("\nclass balance:")
-    names = ["Background", "Car", "Pedestrian", "Cyclist"]
-    for i, nm in enumerate(names):
+    for i, nm in enumerate(CLASSES):
         print(f"  {nm:<12}{counts[i]:>9,}  {100*counts[i]/max(n_total,1):>6.2f}%")
     if counts[1:].sum():
         print(f"\nbackground : foreground = "

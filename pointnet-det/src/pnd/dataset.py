@@ -34,11 +34,16 @@ from .config import Config
 
 # KITTI mean dimensions (l, w, h). Size is regressed as a log-ratio against
 # these so a 0.8 m pedestrian and a 3.9 m car produce comparably scaled targets.
+# Measured over the training labels at truncation < 0.5. The first three
+# reproduce the previous hand-entered values exactly, which is the check that
+# the extraction reads the right columns (KITTI stores h w l, not l w h).
 ANCHORS = np.array([
     [1.00, 1.00, 1.00],     # background - unused
     [3.89, 1.62, 1.53],     # Car
     [0.84, 0.66, 1.76],     # Pedestrian
     [1.76, 0.60, 1.74],     # Cyclist
+    [5.07, 1.90, 2.21],     # Van
+    [10.13, 2.59, 3.24],    # Truck
 ], dtype=np.float32)
 
 

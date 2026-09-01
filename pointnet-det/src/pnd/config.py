@@ -45,7 +45,8 @@ class Config:
 
     # --- model ------------------------------------------------------- #
     canon: str = "pca2_yaw"
-    num_classes: int = 4
+    num_classes: int = 6          # background + Car/Pedestrian/Cyclist/Van/Truck
+    init_from: Path | None = None  # warm-start checkpoint, set from the CLI
     in_ch: int = 6                        # xyz + agl + range + intensity
     width: int = 1024
     dropout: float = 0.3
