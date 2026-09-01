@@ -82,6 +82,21 @@ MAX_ROUGH_M = 0.020       # MAD, not RMS - see ground.py
 # it, so it scales as GroundGrid predicts.
 ROUGH_D_SF = 0.0          # measured harmful - see note
 STEP_D_SF = 8.0e-5        # metres of extra step tolerance per metre^2
+COUNT_K = 0.0             # evidence-based widening: swept, does not help
+
+# Minimum ground returns before a sector is classified at all.
+#
+# At 5 this labels sectors holding a handful of points with the same confidence
+# as ones holding two hundred. Measured class mix by range: 45.9% drivable
+# inside 10 m against 6.3% beyond 30 m, where the median sector has 27 points
+# and many have under 10. Most of that far-field "non-drivable" is not terrain
+# judgement, it is noise being read as texture.
+#
+# Widening the threshold to compensate was swept and does not work - it buys
+# false positives faster than true ones. The correct answer is not a looser bar
+# but an honest one: below this count the sector reports UNKNOWN. For a
+# drivability map, "no evidence" and "not drivable" must not be the same output.
+MIN_SECTOR_PTS = 20
 
 # Drivability classes
 DRIVABLE, MARGINAL, NON_DRIVABLE, UNKNOWN = 0, 1, 2, 3
@@ -139,7 +154,7 @@ def sector_features(stats: dict) -> dict:
         "step": step,
         "h": stats["h"],
         "n": stats["n"],
-        "valid": stats["n"] >= 5,
+        "valid": stats["n"] >= MIN_SECTOR_PTS,
     }
 
 
@@ -149,6 +164,7 @@ def drivability_score(feat: dict,
                       max_rough: float = MAX_ROUGH_M,
                       rough_d_sf: float = ROUGH_D_SF,
                       step_d_sf: float = STEP_D_SF,
+                      count_k: float = COUNT_K,
                       smooth: bool = True,
                       n_radial: int = 24, n_azimuth: int = 72) -> np.ndarray:
     """Continuous cost, 0 = ideal, 1 = at the limit, >1 = over it.
@@ -168,6 +184,15 @@ def drivability_score(feat: dict,
     d = feat.get("range")
     rough_t = max_rough + (rough_d_sf * d * d if d is not None else 0.0)
     step_t = max_step + (step_d_sf * d * d if d is not None else 0.0)
+    if count_k > 0.0 and feat.get("n") is not None:
+        # Widen the roughness bar by the standard error of the estimate itself.
+        # MAD over n samples has standard error ~ MAD/sqrt(n), and n collapses
+        # with range (180 points per sector inside 10 m, 27 beyond 30 m). Scaling
+        # by distance is a proxy for that; scaling by sqrt(n) is the thing
+        # itself, and it also widens correctly for a sector that is close but
+        # sparsely hit -- occluded, or at a grazing angle.
+        nn = np.maximum(feat["n"].astype(np.float64), 1.0)
+        rough_t = rough_t * (1.0 + count_k / np.sqrt(nn))
     sc = np.maximum.reduce([
         feat["rough"] / np.maximum(rough_t, 1e-6),
         feat["step"] / np.maximum(step_t, 1e-6),
