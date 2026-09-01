@@ -140,6 +140,7 @@ footer{padding:32px 0 50px;color:var(--muted);font-size:13px}
       <button class="b vw" data-v="3d" aria-pressed="true">3D</button>
       <button class="b vw" data-v="cam">camera</button>
       <button class="b" id="ovl" aria-pressed="true">overlay</button>
+      <button class="b" id="filled" aria-pressed="true">filled terrain</button>
     </div>
     <div class="stage">
       <canvas id="cv"></canvas>
@@ -157,6 +158,12 @@ footer{padding:32px 0 50px;color:var(--muted);font-size:13px}
     <div class="prose">
       <p>Every frame is processed from scratch — nothing is tracked or carried between frames. The sensor is a Velodyne HDL-64E at 10 Hz; playback at 1× is real time.</p>
       <p>The colour groups map directly onto the problem statement's categories. The ground is split three ways by drivability — <b>drivable</b>, <b>marginal</b>, <b>non-drivable</b> — from the slope, roughness and step of the same plane fit that found it. <b>Static obstacle</b> is any non-ground cluster the network classifies as background: walls, poles, vegetation. <b>Car, Pedestrian and Cyclist</b> are the dynamic-capable classes, drawn with their predicted 3D boxes.</p>
+      <p><b>filled terrain</b> draws the ground as the sector wedges the classifier
+      actually decides on, rather than as sampled points. The point view shows
+      5,000 of roughly 122,000 returns, so a perfectly coherent surface looks
+      speckled — that sparseness is the sampling, not the model. Cells grow with
+      range because the grid bins radius as √(r/R), the same foveation the output
+      map is built on.</p>
       <p>Terrain uses a muted good / warning / critical scale because it covers most of the scene and is context; the object classes stay saturated so they stay findable against it.</p>
     </div>
     <div class="note" style="margin-top:20px">
@@ -273,6 +280,26 @@ function camImage(i,cb){
   im.src="data:image/jpeg;base64,"+b64;
 }
 
+// ---- sector grid: the decision surface, not a sample of it -------------- //
+var G=D.grid||null, gCls=null, gH=null, NSEC=0;
+if(G){
+  gCls=unb64(G.cls); gH=new Int16Array(unb64(G.h).buffer);
+  NSEC=G.nr*G.na;
+}
+/* Sector wedge corners on the ground plane. The grid bins radius as
+   sqrt(r/R), so ring k spans (k/nr)^2*R to ((k+1)/nr)^2*R -- cells grow with
+   range, which is the same foveation the output map is built on. */
+function sectorQuad(si){
+  var ri=(si/G.na)|0, ai=si%G.na;
+  var r0=Math.pow(ri/G.nr,2)*G.R, r1=Math.pow((ri+1)/G.nr,2)*G.R;
+  var t0=(ai/G.na)*2*Math.PI-Math.PI, t1=((ai+1)/G.na)*2*Math.PI-Math.PI;
+  var z=gH[cur*NSEC+si]/100;
+  return [[r0*Math.cos(t0),r0*Math.sin(t0),z],
+          [r1*Math.cos(t0),r1*Math.sin(t0),z],
+          [r1*Math.cos(t1),r1*Math.sin(t1),z],
+          [r0*Math.cos(t1),r0*Math.sin(t1),z]];
+}
+
 var CLS=D.classes;
 var CVAR=["--c-unscored","--c-drivable","--c-marginal","--c-nondriv",
           "--c-static","--c-car","--c-ped","--c-cyc"];
@@ -299,7 +326,7 @@ function resize(){
   draw();
 }
 
-var cur=0, view="3d", overlay=true;
+var cur=0, view="3d", overlay=true, filled=true;
 
 function draw(){
   if(view==="cam"&&CAM){drawCam();return;}
@@ -350,6 +377,7 @@ function draw3d(){
   for(var i=0;i<n;i++){
     var c=cls[i];
     if(!on[c])continue;
+    if(filled&&c>=1&&c<=3)continue;      // ground drawn as wedges instead
     var x=xyz[i*3]/Q,y=xyz[i*3+1]/Q,z=xyz[i*3+2]/Q;
     var X=x*ca-y*sa,Y=x*sa+y*ca;
     var Y2=Y*cp-z*sp,Z2=Y*sp+z*cp;
@@ -370,6 +398,7 @@ function draw3d(){
   }
   ctx.putImageData(img,0,0);
 
+  if(filled&&G)drawSectors(ca,sa,cp,sp,f,cx,cy);
   if(showBoxes)drawBoxes(ca,sa,cp,sp,f,cx,cy);
   drawStats();
 }
@@ -381,6 +410,35 @@ function proj(x,y,z,ca,sa,cp,sp,f,cx,cy){
   if(d<0.6)return null;
   return [cx+f*X/d,cy-f*Z2/d];
 }
+/* Filled ground. Painted far-to-near so nearer wedges overwrite farther ones,
+   which is a cheap painter's algorithm - correct here because every wedge lies
+   on the ground plane and none can intersect another. */
+function drawSectors(ca,sa,cp,sp,f,cx,cy){
+  var base=cur*NSEC;
+  for(var ri=G.nr-1;ri>=0;ri--){
+    for(var ai=0;ai<G.na;ai++){
+      var si=ri*G.na+ai, c=gCls[base+si];
+      if(c>2)continue;                      // 3 = unknown, draw nothing
+      var vc=c+1;                           // terrain classes start at 1
+      if(!on[vc])continue;
+      var q=sectorQuad(si), pj=[], ok=true;
+      for(var k=0;k<4;k++){
+        var pp=proj(q[k][0],q[k][1],q[k][2],ca,sa,cp,sp,f,cx,cy);
+        if(!pp){ok=false;break;}
+        pj.push(pp);
+      }
+      if(!ok)continue;
+      ctx.fillStyle=S(CVAR[vc]);
+      ctx.globalAlpha=0.72;
+      ctx.beginPath();
+      ctx.moveTo(pj[0][0],pj[0][1]);
+      for(var k2=1;k2<4;k2++)ctx.lineTo(pj[k2][0],pj[k2][1]);
+      ctx.closePath();ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+}
+
 var EDGES=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
 function drawBoxes(ca,sa,cp,sp,f,cx,cy){
   var dets=F[cur].d||[];
@@ -504,6 +562,9 @@ document.querySelectorAll("button.b.vw").forEach(function(b){
 });
 document.getElementById("ovl").addEventListener("click",function(){
   overlay=!overlay;this.setAttribute("aria-pressed",overlay?"true":"false");draw();});
+document.getElementById("filled").addEventListener("click",function(){
+  filled=!filled;this.setAttribute("aria-pressed",filled?"true":"false");draw();});
+if(!G)document.getElementById("filled").disabled=true;
 if(!CAM){
   document.querySelector('button.b.vw[data-v="cam"]').disabled=true;
   document.getElementById("ovl").disabled=true;

@@ -32,6 +32,10 @@ label{display:flex;gap:6px;align-items:center;color:var(--dim);cursor:pointer}
 .key{display:flex;gap:14px;align-items:center;margin-left:auto;flex-wrap:wrap}
 .k{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--dim)}
 .sw{width:11px;height:11px;border-radius:2px;display:inline-block}
+.seg{display:flex;gap:0;align-items:center;color:var(--dim);font-size:11px}
+.seg button{border-radius:0;padding:5px 10px;font-size:11px;margin-left:-1px}
+.seg button:first-of-type{border-radius:5px 0 0 5px;margin-left:8px}
+.seg button:last-of-type{border-radius:0 5px 5px 0}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);
       font-size:12px}
@@ -59,6 +63,13 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   <button id="play">Play</button>
   <input type="range" id="scrub" min="0" value="0">
   <span id="fno" style="color:var(--dim);font-variant-numeric:tabular-nums"></span>
+  <span class="seg">view
+    <button id="v_top" class="on">top-down</button><button id="v_3d">3D</button>
+  </span>
+  <span class="seg" id="exagwrap">height &times;
+    <button id="x1">1</button><button id="x8" class="on">8</button
+    ><button id="x20">20</button><button id="x50">50</button>
+  </span>
   <label><input type="checkbox" id="height"> shade by height</label>
   <label><input type="checkbox" id="rings" checked> range rings</label>
   <div class="key">
@@ -118,6 +129,23 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   forward reach: nothing here tells you about road 50 m ahead that has not been
   observed from close range yet. The ahead and behind rows are reported
   separately for that reason.
+  <br><br>
+  <b>On the elevation.</b> Switch to 3D and the surface looks nearly flat at
+  &times;1, because it is: measured on this map the ground spans 105 cm of
+  relief across an 80 m scene, a vertical-to-horizontal ratio of about 1:76.
+  A road drawn to scale is a plane. The height is real all the same, and the
+  cross-road profile shows it — road centre at &minus;1.96 m, falling 0.6&deg;
+  to the far side, with the kerb and pavement standing 35 cm proud at
+  y&nbsp;=&nbsp;&minus;6&nbsp;to&nbsp;&minus;10&nbsp;m. That 35 cm step is
+  precisely what the step term rejects as non-drivable, so the red band along
+  the kerb in the top-down view and the ledge in the 3D view are the same
+  measurement seen twice. Exaggerate the vertical to see it; every number in
+  the table still comes from the true heights.
+  <br><br>
+  A viewer showing tall buildings is rendering a different layer: the top
+  surface of <i>every</i> occupied cell. This one renders only the ground,
+  because drivability is a property of the ground. Neither is more correct —
+  they answer different questions, and the same 2.5D cells carry both.
 </div>
 
 <script>
@@ -158,6 +186,66 @@ function ramp(t) {                       // height shading, blue -> warm
   const r = Math.round(30 + 200 * t), g = Math.round(90 + 90 * t),
         b = Math.round(200 - 130 * t);
   return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// ---------------------------------------------------------------- 3D
+//
+// A ground surface is genuinely almost flat: 105 cm of relief across an 80 m
+// scene here, about 1:76. Drawn to scale it looks like a plane, which is
+// correct and also useless to look at, so the vertical axis is exaggerated and
+// the factor is always stated. Nothing but the drawing changes -- every number
+// in the table comes from the true heights.
+//
+// Cells sit on a regular lattice, so each is one quad at its own height,
+// painted back to front. No library, no lighting model: the colour already
+// carries the meaning and shading it would only compete.
+
+let AZ = 0.62, EL = 0.42, EXAG = 8;
+
+function project(x, y, z, w, h) {
+  const ca = Math.cos(AZ), sa = Math.sin(AZ);
+  const rx = x * ca - y * sa, ry = x * sa + y * ca;
+  const ce = Math.cos(EL), se = Math.sin(EL);
+  const depth = ry * ce - z * se;          // into the screen
+  const up = ry * se + z * ce;             // screen vertical
+  const sc = (w / (2 * HALF)) * 1.35;
+  return [w / 2 + rx * sc, h / 2 - up * sc - h * 0.06, depth];
+}
+
+function draw3d(ctx, C, byHeight) {
+  ctx.fillStyle = '#0b0e13'; ctx.fillRect(0, 0, SZ, SZ);
+  if (!C.n) return;
+
+  let lo = 1e9, hi = -1e9;
+  for (let i = 0; i < C.n; i++) {
+    const h = C.hz[i] / D.qz; if (h < lo) lo = h; if (h > hi) hi = h;
+  }
+  const span = Math.max(hi - lo, 0.3), mid = (lo + hi) / 2;
+
+  // painter's algorithm: depth from the projected centre of each cell
+  const idx = new Int32Array(C.n);
+  const dep = new Float32Array(C.n);
+  for (let i = 0; i < C.n; i++) {
+    idx[i] = i;
+    const z = (C.hz[i] / D.qz - mid) * EXAG;
+    dep[i] = project(C.ix[i] * D.res, C.iy[i] * D.res, z, SZ, SZ)[2];
+  }
+  const ord = Array.from(idx).sort((a, b) => dep[b] - dep[a]);
+
+  const r = D.res / 2;
+  for (const i of ord) {
+    const x = C.ix[i] * D.res, y = C.iy[i] * D.res;
+    const z = (C.hz[i] / D.qz - mid) * EXAG;
+    const a = project(x - r, y - r, z, SZ, SZ);
+    const b = project(x + r, y - r, z, SZ, SZ);
+    const c = project(x + r, y + r, z, SZ, SZ);
+    const d = project(x - r, y + r, z, SZ, SZ);
+    ctx.fillStyle = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : COL[C.k[i]];
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+    ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+    ctx.closePath(); ctx.fill();
+  }
 }
 
 function draw(ctx, C, byHeight, showRings) {
@@ -207,7 +295,8 @@ function show(k) {
   const A = cells('single', k), B = cells('accum', k);
   const byH = document.getElementById('height').checked;
   const rg = document.getElementById('rings').checked;
-  draw(g1, A, byH, rg); draw(g2, B, byH, rg);
+  if (MODE3D) { draw3d(g1, A, byH); draw3d(g2, B, byH); }
+  else { draw(g1, A, byH, rg); draw(g2, B, byH, rg); }
 
   document.getElementById('s1').textContent = f.ns.toLocaleString() + ' cells';
   document.getElementById('s2').textContent =
@@ -240,6 +329,35 @@ function row(title, S, A) {
   }
   return h;
 }
+
+let MODE3D = false;
+
+function seg(ids, pick, fn) {
+  for (const id of ids) {
+    document.getElementById(id).onclick = () => {
+      for (const o of ids) document.getElementById(o).classList.remove('on');
+      document.getElementById(id).classList.add('on');
+      fn(pick[id]); show(cur);
+    };
+  }
+}
+seg(['v_top', 'v_3d'], { v_top: false, v_3d: true }, v => { MODE3D = v; });
+seg(['x1', 'x8', 'x20', 'x50'],
+    { x1: 1, x8: 8, x20: 20, x50: 50 }, v => { EXAG = v; });
+
+// orbit, only meaningful in 3D
+let drag = null;
+for (const cv of [c1, c2]) {
+  cv.addEventListener('mousedown', e => { drag = [e.clientX, e.clientY]; });
+  cv.addEventListener('mousemove', e => {
+    if (!drag || !MODE3D) return;
+    AZ += (e.clientX - drag[0]) * 0.008;
+    EL = Math.max(0.05, Math.min(1.45, EL + (e.clientY - drag[1]) * 0.006));
+    drag = [e.clientX, e.clientY];
+    show(cur);
+  });
+}
+addEventListener('mouseup', () => { drag = null; });
 
 const scrub = document.getElementById('scrub');
 scrub.max = D.frames.length - 1;

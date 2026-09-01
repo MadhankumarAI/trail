@@ -16,12 +16,15 @@ const m = html.match(/<script>([\s\S]*)<\/script>/);
 if (!m) { console.error('no script block found'); process.exit(1); }
 
 // --- stub DOM -----------------------------------------------------------
-const drawn = { rect: 0, text: 0 };
+const drawn = { rect: 0, text: 0, quad: 0 };
 const ctx = new Proxy({}, {
   get(_, k) {
     if (k === 'fillRect') return () => { drawn.rect++; };
     if (k === 'fillText') return () => { drawn.text++; };
     if (k === 'measureText') return () => ({ width: 10 });
+  if (k === 'beginPath' || k === 'moveTo' || k === 'lineTo' ||
+      k === 'closePath') return () => {};
+  if (k === 'fill') return () => { drawn.quad++; };
     return () => {};
   },
   set() { return true; },
@@ -66,14 +69,23 @@ try {
 
 let bad = 0;
 const tot = { s: 0, a: 0 };
+
+// both view modes, both colour modes, every frame. the 3D path sorts and
+// projects per cell, so a bad index there throws only when it is actually run.
+const views = [['top-down', 'v_top'], ['3D', 'v_3d']];
 for (let k = 0; k < D.frames.length; k++) {
-  for (const mode of [false, true]) {
-    ids['height'].checked = mode;
-    try {
-      globalThis.__show(k);
-    } catch (e) {
-      console.error(`  frame ${k} (height=${mode}) THREW: ${e.message}`);
-      bad++;
+  for (const [vname, vid] of views) {
+    try { ids[vid].onclick(); } catch (e) {
+      console.error(`  view ${vname} toggle THREW: ${e.message}`); bad++;
+    }
+    for (const mode of [false, true]) {
+      ids['height'].checked = mode;
+      try {
+        globalThis.__show(k);
+      } catch (e) {
+        console.error(`  frame ${k} (${vname}, height=${mode}) THREW: ${e.message}`);
+        bad++;
+      }
     }
   }
   // the alignment check that actually matters: the last element of every
@@ -97,7 +109,7 @@ console.log(`odd counts    : ${oddS} single, ${oddA} accumulated ` +
 console.log(`cells total   : ${tot.s.toLocaleString()} single, ` +
             `${tot.a.toLocaleString()} accumulated`);
 console.log(`canvas ops    : ${drawn.rect.toLocaleString()} fillRect, ` +
-            `${drawn.text} fillText`);
+            `${drawn.quad.toLocaleString()} quad fills, ${drawn.text} fillText`);
 console.log(`table rows    : ${(ids['tbody'].innerHTML.match(/<tr>/g) || []).length}`);
 console.log(`readout       : "${ids['fno'].textContent}"`);
 console.log(`thresholds    : "${ids['thr'].textContent}"`);
