@@ -1,0 +1,211 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>grid_map layers</title>
+<style>
+:root{--bg:#0e1116;--pan:#161b22;--line:#262d36;--ink:#e6edf3;--dim:#8b949e;--hi:#58a6ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 4px;font-size:16px;font-weight:600}
+.sub{color:var(--dim);font-size:12px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 20px;
+     border-bottom:1px solid var(--line);background:var(--pan)}
+button{background:#21262d;color:var(--ink);border:1px solid var(--line);
+       border-radius:6px;padding:5px 11px;cursor:pointer;font:inherit;font-size:12px}
+button:hover{background:#2d333b}
+button.on{background:var(--hi);border-color:var(--hi);color:#06121f;font-weight:600}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;padding:14px 20px}
+.panel{background:var(--pan);border:1px solid var(--line);border-radius:8px;padding:12px}
+canvas{width:100%;height:auto;display:block;background:#0b0e13;border-radius:4px;
+       image-rendering:pixelated;cursor:crosshair}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:4px 7px;text-align:right;border-bottom:1px solid var(--line);font-size:11px}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:500;text-transform:uppercase;letter-spacing:.4px}
+tr.sel td{background:#1c2735;color:var(--hi)}
+.scale{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:var(--dim)}
+.ramp{flex:1;height:12px;border-radius:3px}
+.read{font:12px ui-monospace,monospace;color:var(--ink);margin-top:8px;min-height:18px}
+.foot{padding:6px 20px 26px;color:var(--dim);font-size:11px;max-width:1000px}
+code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
+</style>
+
+<header>
+  <h1>grid_map layers</h1>
+  <div class="sub">Rendered from the emitted <code>grid_map_msgs/GridMap</code>
+    itself &mdash; decoded back out of the column-major Float32MultiArray, so
+    this page is also a check that the serialisation round-trips.</div>
+</header>
+
+<div class="bar" id="picker"></div>
+
+<div class="wrap">
+  <div class="panel">
+    <canvas id="cv" width="256" height="256"></canvas>
+    <div class="scale">
+      <span id="lo"></span>
+      <span class="ramp" id="ramp"></span>
+      <span id="hi"></span>
+    </div>
+    <div class="read" id="read">hover a cell</div>
+  </div>
+  <div class="panel">
+    <table><thead><tr><th>layer</th><th>median</th><th>cells</th></tr></thead>
+      <tbody id="stats"></tbody></table>
+    <div class="scale" style="display:block;margin-top:12px">
+      <div id="geom"></div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <b>traversability</b> is scored against physical limits &mdash; 30&deg; slope,
+  15 cm step, 10 cm roughness &mdash; the way grid_map's own filter chain does
+  it, so ordinary road reads near 1. <b>drivable</b> is our calibrated verdict
+  (1 drivable, 0.5 marginal, 0 non-drivable), whose 4 cm roughness threshold was
+  swept against SemanticKITTI road labels for best F1. They are separate layers
+  on purpose: a decision boundary tuned on one dataset is not a vehicle limit,
+  and publishing one as the other paints good tarmac untraversable.
+  <b>obstacle_height</b> is geometric &mdash; how far the tallest return in a
+  cell stands above that cell's own ground &mdash; so unlike the detector it is
+  not restricted to the forward field of view.
+</div>
+
+<script>
+const D = __GRIDMAP__;
+const info = D.info;
+const NY = D.data[0].layout.dim[0].size;   // column_index
+const NX = D.data[0].layout.dim[1].size;   // row_index
+const RES = info.resolution;
+
+// column-major, exactly as grid_map copies an Eigen matrix out
+function layer(name) {
+  const flat = D.data[D.layers.indexOf(name)].data;
+  const a = new Float32Array(NX * NY);
+  for (let c = 0; c < NY; c++)
+    for (let r = 0; r < NX; r++) a[r * NY + c] = flat[c * NX + r];
+  return a;
+}
+
+const CMAP = {
+  terrain: [[22,58,96],[30,110,120],[45,140,95],[130,165,70],[205,180,85],
+            [200,130,70],[225,225,225]],
+  trav: [[218,54,51],[210,153,34],[46,160,67]],
+  grey: [[20,24,30],[120,130,140],[235,240,245]],
+};
+const STYLE = {
+  elevation: ['terrain', null],
+  variance: ['grey', [0, 0.05]],
+  n_observations: ['grey', [0, 300]],
+  traversability: ['trav', [0, 1]],
+  traversability_slope: ['trav', [0, 1]],
+  traversability_step: ['trav', [0, 1]],
+  traversability_roughness: ['trav', [0, 1]],
+  drivable: ['trav', [0, 1]],
+  obstacle_height: ['grey', [0, 3]],
+};
+
+function tint(t, cm) {
+  t = Math.max(0, Math.min(1, t));
+  const x = t * (cm.length - 1), i = Math.min(cm.length - 2, Math.floor(x)), u = x - i;
+  return [cm[i][0] + (cm[i+1][0] - cm[i][0]) * u,
+          cm[i][1] + (cm[i+1][1] - cm[i][1]) * u,
+          cm[i][2] + (cm[i+1][2] - cm[i][2]) * u];
+}
+
+// crop to the populated block, otherwise the picture is mostly empty grid
+const E = layer('elevation');
+let r0 = 1e9, r1 = -1, c0 = 1e9, c1 = -1;
+for (let r = 0; r < NX; r++) for (let c = 0; c < NY; c++) {
+  if (Number.isFinite(E[r * NY + c])) {
+    if (r < r0) r0 = r; if (r > r1) r1 = r;
+    if (c < c0) c0 = c; if (c > c1) c1 = c;
+  }
+}
+const CW = c1 - c0 + 1, CH = r1 - r0 + 1;
+
+const cv = document.getElementById('cv'), g = cv.getContext('2d');
+cv.width = CW; cv.height = CH;
+let cur = 'elevation', CURA = null, CURLO = 0, CURHI = 1;
+
+function pct(a, p) {
+  const v = Array.from(a).filter(Number.isFinite).sort((x, y) => x - y);
+  return v.length ? v[Math.floor(p * (v.length - 1))] : 0;
+}
+
+function show(name) {
+  cur = name;
+  const a = layer(name); CURA = a;
+  const [cmName, rng] = STYLE[name] || ['grey', null];
+  const cm = CMAP[cmName];
+  const lo = rng ? rng[0] : pct(a, 0.02);
+  const hi = rng ? rng[1] : pct(a, 0.98);
+  CURLO = lo; CURHI = hi;
+
+  const img = g.createImageData(CW, CH);
+  for (let r = 0; r < CH; r++) for (let c = 0; c < CW; c++) {
+    const v = a[(r + r0) * NY + (c + c0)];
+    const o = (r * CW + c) * 4;
+    if (!Number.isFinite(v)) { img.data[o] = 11; img.data[o+1] = 14; img.data[o+2] = 19; img.data[o+3] = 255; continue; }
+    const col = tint((v - lo) / Math.max(hi - lo, 1e-9), cm);
+    img.data[o] = col[0]; img.data[o+1] = col[1]; img.data[o+2] = col[2]; img.data[o+3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+
+  document.getElementById('lo').textContent = lo.toFixed(2);
+  document.getElementById('hi').textContent = hi.toFixed(2);
+  document.getElementById('ramp').style.background =
+    'linear-gradient(90deg,' + cm.map(c => 'rgb(' + c.join(',') + ')').join(',') + ')';
+  for (const b of document.querySelectorAll('#picker button'))
+    b.classList.toggle('on', b.textContent === name);
+  for (const tr of document.querySelectorAll('#stats tr'))
+    tr.classList.toggle('sel', tr.dataset.name === name);
+}
+
+cv.addEventListener('mousemove', e => {
+  const b = cv.getBoundingClientRect();
+  const c = Math.floor((e.clientX - b.left) / b.width * CW);
+  const r = Math.floor((e.clientY - b.top) / b.height * CH);
+  if (c < 0 || c >= CW || r < 0 || r >= CH) return;
+  const ir = r + r0, ic = c + c0;
+  const v = CURA[ir * NY + ic];
+  // getPositionFromIndex: mapPosition + (0.5*L - 0.5*res) - res*index
+  const px = info.pose.position.x + 0.5 * info.length_x - 0.5 * RES - ir * RES;
+  const py = info.pose.position.y + 0.5 * info.length_y - 0.5 * RES - ic * RES;
+  document.getElementById('read').textContent =
+    'index (' + ir + ', ' + ic + ')   world (' + px.toFixed(2) + ', ' +
+    py.toFixed(2) + ') m   ' + cur + ' = ' +
+    (Number.isFinite(v) ? v.toFixed(3) : 'no data');
+});
+
+const pk = document.getElementById('picker');
+for (const n of D.layers) {
+  const b = document.createElement('button');
+  b.textContent = n; b.onclick = () => show(n); pk.appendChild(b);
+}
+
+let rows = '';
+for (const n of D.layers) {
+  const a = layer(n);
+  const f = Array.from(a).filter(Number.isFinite);
+  const med = f.length ? pct(a, 0.5) : NaN;
+  rows += '<tr data-name="' + n + '"><td>' + n + '</td><td>' +
+          (f.length ? med.toFixed(3) : '&mdash;') + '</td><td>' +
+          f.length.toLocaleString() + '</td></tr>';
+}
+document.getElementById('stats').innerHTML = rows;
+for (const tr of document.querySelectorAll('#stats tr'))
+  tr.onclick = () => show(tr.dataset.name);
+
+document.getElementById('geom').innerHTML =
+  'resolution <b>' + RES + ' m</b><br>' +
+  'grid <b>' + NX + ' &times; ' + NY + '</b> over ' +
+  info.length_x + ' &times; ' + info.length_y + ' m<br>' +
+  'centre (' + info.pose.position.x.toFixed(2) + ', ' +
+  info.pose.position.y.toFixed(2) + ') in <b>' + info.header.frame_id + '</b><br>' +
+  'showing rows ' + r0 + '&ndash;' + r1 + ', cols ' + c0 + '&ndash;' + c1 +
+  '<br>start index ' + D.outer_start_index + ' / ' + D.inner_start_index;
+
+show('elevation');
+</script>
