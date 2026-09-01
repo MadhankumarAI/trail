@@ -201,7 +201,16 @@ class Collate:
 
         # ---- targets, in the same canonical frame --------------------- #
         dc = np.einsum("bij,bj->bi", Rc, ctr_gt - tc) / scale[:, None]
-        anch = ANCHORS[np.clip(cls, 0, 3)]
+        # Clip to the anchor table, NOT to a literal. This read `clip(cls, 0, 3)`
+        # from when there were exactly four classes, so adding Van (4) and
+        # Truck (5) silently folded both onto ANCHORS[3], the Cyclist anchor:
+        # training regressed size as log(dims / cyclist) while inference decodes
+        # exp(size_log) * ANCHORS[van]. The predicted box then comes out too big
+        # by exactly the ratio between the two anchors, which is why Van boxes
+        # landed with the centre within 0.2 m and the yaw within a degree and
+        # still scored 0.00 AP -- the height ratio of predicted to truth was
+        # 1.27, and ANCHORS[Van].h / ANCHORS[Cyclist].h is 2.21/1.74 = 1.27.
+        anch = ANCHORS[np.clip(cls, 0, len(ANCHORS) - 1)]
         size_log = np.log(np.maximum(dims_gt, 1e-3) / np.maximum(anch, 1e-3))
         yaw_c_off = np.arctan2(Rc[:, 1, 0], Rc[:, 0, 0])
         yaw_t = yaw_gt + yaw_c_off
