@@ -1,0 +1,276 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Terrain layer — single frame vs accumulated</title>
+<style>
+:root{
+  --bg:#0e1116; --pan:#161b22; --line:#262d36; --ink:#e6edf3; --dim:#8b949e;
+  --drv:#2ea043; --mrg:#d29922; --non:#da3633; --unk:#30363d; --hi:#58a6ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 4px;font-size:16px;font-weight:600;letter-spacing:.2px}
+.sub{color:var(--dim);font-size:12px}
+.wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 20px}
+.panel{background:var(--pan);border:1px solid var(--line);border-radius:8px;
+       padding:10px;min-width:0}
+.ptitle{display:flex;justify-content:space-between;align-items:baseline;
+        margin-bottom:8px}
+.ptitle b{font-size:13px;font-weight:600}
+.ptitle span{color:var(--dim);font-size:11px;font-variant-numeric:tabular-nums}
+canvas{width:100%;height:auto;display:block;background:#0b0e13;border-radius:4px}
+.bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+     padding:10px 20px;border-top:1px solid var(--line);
+     border-bottom:1px solid var(--line);background:var(--pan)}
+button{background:#21262d;color:var(--ink);border:1px solid var(--line);
+       border-radius:6px;padding:6px 14px;cursor:pointer;font:inherit}
+button:hover{background:#2d333b}
+button.on{background:var(--hi);border-color:var(--hi);color:#06121f;font-weight:600}
+input[type=range]{width:260px;accent-color:var(--hi)}
+label{display:flex;gap:6px;align-items:center;color:var(--dim);cursor:pointer}
+.key{display:flex;gap:14px;align-items:center;margin-left:auto;flex-wrap:wrap}
+.k{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--dim)}
+.sw{width:11px;height:11px;border-radius:2px;display:inline-block}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;text-align:right;border-bottom:1px solid var(--line);
+      font-size:12px}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:500;font-size:11px;text-transform:uppercase;
+   letter-spacing:.4px}
+.gain{color:var(--drv);font-weight:600}
+tr.grp td{color:var(--hi);font-size:11px;text-transform:uppercase;
+          letter-spacing:.5px;padding-top:12px;border-bottom:1px solid var(--line)}
+td i{color:#6e7681;font-style:normal;font-size:10px}
+.loss{color:var(--non)}
+.foot{padding:12px 20px 28px;color:var(--dim);font-size:11px;max-width:1100px}
+code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
+</style>
+
+<header>
+  <h1>Terrain layer — one sweep against a world-anchored map</h1>
+  <div class="sub">Identical drivability code on both sides. The only
+    difference is how much evidence reached each cell. In the band a planner
+    actually steers on — 10 to 20 m ahead — cells with no verdict fall from
+    36% to 19%, and the map keeps what it learned as the vehicle moves on.</div>
+</header>
+
+<div class="bar">
+  <button id="play">Play</button>
+  <input type="range" id="scrub" min="0" value="0">
+  <span id="fno" style="color:var(--dim);font-variant-numeric:tabular-nums"></span>
+  <label><input type="checkbox" id="height"> shade by height</label>
+  <label><input type="checkbox" id="rings" checked> range rings</label>
+  <div class="key">
+    <span class="k"><i class="sw" style="background:var(--drv)"></i>drivable</span>
+    <span class="k"><i class="sw" style="background:var(--mrg)"></i>marginal</span>
+    <span class="k"><i class="sw" style="background:var(--non)"></i>non-drivable</span>
+    <span class="k"><i class="sw" style="background:var(--unk)"></i>no evidence</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="ptitle"><b>Single frame</b><span id="s1"></span></div>
+    <canvas id="c1" width="620" height="620"></canvas>
+  </div>
+  <div class="panel">
+    <div class="ptitle"><b>Accumulated map</b><span id="s2"></span></div>
+    <canvas id="c2" width="620" height="620"></canvas>
+  </div>
+</div>
+
+<div class="wrap" style="grid-template-columns:1fr">
+  <div class="panel">
+    <div class="ptitle"><b>Cells carrying a verdict, by range</b>
+      <span id="pinfo"></span></div>
+    <table id="tbl"><thead><tr>
+      <th>band</th><th>single: drivable</th><th>accumulated: drivable</th>
+      <th>&Delta;</th><th>single: no evidence</th><th>accumulated: no evidence</th>
+      <th>&Delta;</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<div class="foot">
+  Top-down, vehicle at centre facing up, <span id="rr"></span> m half-width.
+  Cells are <span id="cellsz"></span> m — a coarsening of the map's
+  <span id="finesz"></span> m lattice, since a 5 cm cell holds one or two
+  returns and carries no surface statistic. A cell is drawn only once it has
+  enough ground returns to be judged; everything else is absent, which is why
+  the left panel thins out with range while the right one does not.
+  <br><br>
+  <b>Why the panels differ.</b> Accumulation is not free. Merged naively it is
+  <i>worse</i> than a single frame, because the same patch of road disagrees
+  between sweeps by a median 7.1 cm — systematically, ramping about 24 cm over
+  20 m of travel, which is a ~0.7&deg; pitch error in the pose chain. That lands
+  as apparent roughness and condemns real road. Each incoming sweep is
+  therefore aligned in z against the map it overlaps, and only returns inside
+  the <span id="tr"></span> m trust gate are ingested at all: beyond that an
+  observation is biased rather than merely noisy, and averaging a biased
+  estimate with a good one stays biased. <code id="thr"></code>
+  <br><br>
+  <b>What this does not do.</b> Because only returns inside the trust gate are
+  ingested, the accumulated map reaches much further behind the vehicle than in
+  front of it — at the last frame it spans <span id="xr"></span> m along the
+  direction of travel. The gain is dense, reliable memory of ground the vehicle
+  has driven past and is still manoeuvring in, and terrain that was distant
+  earlier being resolved properly once approached. It is <i>not</i> extra
+  forward reach: nothing here tells you about road 50 m ahead that has not been
+  observed from close range yet. The ahead and behind rows are reported
+  separately for that reason.
+</div>
+
+<script>
+const D = __TERRAIN__;
+
+const b64 = s => { const r = atob(s), a = new Uint8Array(r.length);
+  for (let i = 0; i < r.length; i++) a[i] = r.charCodeAt(i); return a.buffer; };
+const BUF = { single: b64(D.single), accum: b64(D.accum) };
+
+// byte offset of each frame in each stream. a block is 7n bytes (three int16
+// fields plus one byte of class), so with an odd n the next block would start
+// on an odd offset -- Int16Array refuses that. each block is sliced into its
+// own buffer instead of viewed in place, so every offset is zero.
+const OFF = { single: [], accum: [] };
+let os = 0, oa = 0;
+for (const f of D.frames) {
+  OFF.single.push(os); os += 7 * f.ns;
+  OFF.accum.push(oa);  oa += 7 * f.na;
+}
+
+function cells(which, k) {
+  const n = which === 'single' ? D.frames[k].ns : D.frames[k].na;
+  const blk = BUF[which].slice(OFF[which][k], OFF[which][k] + 7 * n);
+  return { n,
+    ix: new Int16Array(blk, 0, n),
+    iy: new Int16Array(blk, 2 * n, n),
+    hz: new Int16Array(blk, 4 * n, n),
+    k:  new Uint8Array(blk, 6 * n, n) };
+}
+
+const COL = ['#2ea043', '#d29922', '#da3633', '#30363d'];
+const c1 = document.getElementById('c1'), c2 = document.getElementById('c2');
+const g1 = c1.getContext('2d'), g2 = c2.getContext('2d');
+const SZ = c1.width, HALF = D.rmax, SC = SZ / (2 * HALF);
+
+function ramp(t) {                       // height shading, blue -> warm
+  t = Math.max(0, Math.min(1, t));
+  const r = Math.round(30 + 200 * t), g = Math.round(90 + 90 * t),
+        b = Math.round(200 - 130 * t);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function draw(ctx, C, byHeight, showRings) {
+  ctx.fillStyle = '#0b0e13'; ctx.fillRect(0, 0, SZ, SZ);
+  const px = Math.max(1.5, D.res * SC);
+
+  let lo = 1e9, hi = -1e9;
+  if (byHeight) for (let i = 0; i < C.n; i++) {
+    const h = C.hz[i] / D.qz; if (h < lo) lo = h; if (h > hi) hi = h;
+  }
+  const span = Math.max(hi - lo, 0.5);
+
+  for (let i = 0; i < C.n; i++) {
+    // vehicle frame: x forward, y left. screen: x up, y left.
+    const x = C.ix[i] * D.res, y = C.iy[i] * D.res;
+    const sx = SZ / 2 - y * SC, sy = SZ / 2 - x * SC;
+    ctx.fillStyle = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : COL[C.k[i]];
+    ctx.fillRect(sx - px / 2, sy - px / 2, px, px);
+  }
+
+  if (showRings) {
+    ctx.strokeStyle = 'rgba(139,148,158,.30)';
+    ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+    ctx.fillStyle = 'rgba(139,148,158,.75)';
+    ctx.font = '10px ui-monospace,monospace';
+    for (const r of [10, 20, 30, 50]) {
+      if (r > HALF) continue;
+      ctx.beginPath(); ctx.arc(SZ / 2, SZ / 2, r * SC, 0, 6.284); ctx.stroke();
+      ctx.fillText(r + ' m', SZ / 2 + 3, SZ / 2 - r * SC - 3);
+    }
+    ctx.setLineDash([]);
+  }
+  // the vehicle
+  ctx.fillStyle = '#58a6ff';
+  ctx.beginPath();
+  ctx.moveTo(SZ / 2, SZ / 2 - 7);
+  ctx.lineTo(SZ / 2 - 5, SZ / 2 + 5);
+  ctx.lineTo(SZ / 2 + 5, SZ / 2 + 5);
+  ctx.closePath(); ctx.fill();
+}
+
+const tb = document.querySelector('#tbl tbody');
+const pct = v => (100 * v).toFixed(1) + '%';
+
+function show(k) {
+  const f = D.frames[k];
+  const A = cells('single', k), B = cells('accum', k);
+  const byH = document.getElementById('height').checked;
+  const rg = document.getElementById('rings').checked;
+  draw(g1, A, byH, rg); draw(g2, B, byH, rg);
+
+  document.getElementById('s1').textContent = f.ns.toLocaleString() + ' cells';
+  document.getElementById('s2').textContent =
+    f.na.toLocaleString() + ' cells  ·  z-align ' +
+    (f.dz >= 0 ? '+' : '') + f.dz.toFixed(1) + ' cm';
+  document.getElementById('fno').textContent =
+    'frame ' + f.i + '  ·  ' + (k + 1) + '/' + D.frames.length +
+    '  ·  travelled ' + Math.hypot(f.pose[0], f.pose[1]).toFixed(1) + ' m';
+
+  let h = '';
+  h += row('ahead of the vehicle', f.ss, f.sa);
+  h += row('behind and beside', f.ssb, f.sab);
+  tb.innerHTML = h;
+}
+
+function row(title, S, A) {
+  let h = '<tr class="grp"><td colspan="7">' + title + '</td></tr>';
+  for (let b = 0; b < D.bands.length; b++) {
+    const s = S[b], a = A[b];
+    if (!s.n && !a.n) continue;
+    const dd = a.f[0] - s.f[0], du = a.f[3] - s.f[3];
+    h += '<tr><td>' + D.bands[b] + ' m</td>' +
+      '<td>' + pct(s.f[0]) + '</td><td>' + pct(a.f[0]) + '</td>' +
+      '<td class="' + (dd >= 0 ? 'gain' : 'loss') + '">' +
+      (dd >= 0 ? '+' : '') + (100 * dd).toFixed(1) + ' pp</td>' +
+      '<td>' + pct(s.f[3]) + ' <i>(' + s.n.toLocaleString() + ')</i></td>' +
+      '<td>' + pct(a.f[3]) + ' <i>(' + a.n.toLocaleString() + ')</i></td>' +
+      '<td class="' + (du <= 0 ? 'gain' : 'loss') + '">' +
+      (du >= 0 ? '+' : '') + (100 * du).toFixed(1) + ' pp</td></tr>';
+  }
+  return h;
+}
+
+const scrub = document.getElementById('scrub');
+scrub.max = D.frames.length - 1;
+let cur = 0, timer = null;
+const btn = document.getElementById('play');
+
+function go(k) { cur = k; scrub.value = k; show(k); }
+scrub.oninput = () => go(+scrub.value);
+document.getElementById('height').onchange = () => show(cur);
+document.getElementById('rings').onchange = () => show(cur);
+btn.onclick = () => {
+  if (timer) { clearInterval(timer); timer = null; btn.textContent = 'Play';
+               btn.classList.remove('on'); return; }
+  btn.textContent = 'Pause'; btn.classList.add('on');
+  timer = setInterval(() => go((cur + 1) % D.frames.length), 380);
+};
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight') go(Math.min(cur + 1, D.frames.length - 1));
+  if (e.key === 'ArrowLeft') go(Math.max(cur - 1, 0));
+});
+
+document.getElementById('rr').textContent = D.rmax;
+document.getElementById('cellsz').textContent = D.res.toFixed(2);
+document.getElementById('finesz').textContent = D.params.fine.toFixed(2);
+document.getElementById('tr').textContent = D.params.trust;
+document.getElementById('thr').textContent =
+  'roughness ≤ ' + (100 * D.params.rough).toFixed(1) + ' cm, ' +
+  'step ≤ ' + (100 * D.params.step).toFixed(0) + ' cm, ' +
+  'slope ≤ ' + D.params.slope + '°';
+document.getElementById('pinfo').textContent = 'live, for the frame on screen';
+document.getElementById('xr').textContent =
+  D.frames[D.frames.length - 1].xr.join(' to ');
+go(0);
+</script>
