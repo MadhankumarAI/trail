@@ -47,6 +47,32 @@ MAX_SLOPE_DEG = 15.0
 MAX_STEP_M = 0.10
 MAX_ROUGH_M = 0.05
 
+# DISTANCE-SCALED TOLERANCE, after GroundGrid (Steinke et al., RA-L 2024), which
+# thresholds cell variance as t = t_min + d_sf * d^2 rather than at a constant.
+#
+# The reason is measurement, not terrain. Beam divergence and range noise both
+# grow with distance, so a genuinely flat road scatters more at 30 m than at
+# 5 m. A fixed roughness threshold therefore rejects real road as the range
+# grows: measured recall fell from 0.931 in 0-10 m to 0.262 at 20-40 m, which is
+# the sensor getting noisier, not the road getting rougher.
+#
+# Same argument for step: adjacent sector plane heights disagree more at range
+# because each plane is fitted to fewer, noisier points.
+#
+# MEASURED: the idea only half transfers. Sweeping both coefficients on KITTI
+# ROAD, scaling the STEP tolerance helps -- far-field F1 0.403 -> 0.439, recall
+# 0.284 -> 0.337 at no overall cost -- but scaling ROUGHNESS hurts at every
+# setting (overall F1 0.768 -> 0.726 as it rises), so it is off.
+#
+# The difference from GroundGrid is the quantity being thresholded. Theirs is
+# raw cell height variance, which grows with range purely from sensor noise.
+# Ours is the RMS residual about a plane that was *fitted to those same points*,
+# and the fit already absorbs most of that spread. Scaling it a second time
+# over-relaxes and admits genuinely rough non-road. Step has no fit protecting
+# it, so it scales as GroundGrid predicts.
+ROUGH_D_SF = 0.0          # measured harmful - see note
+STEP_D_SF = 8.0e-5        # metres of extra step tolerance per metre^2
+
 # Drivability classes
 DRIVABLE, MARGINAL, NON_DRIVABLE, UNKNOWN = 0, 1, 2, 3
 NAMES = ["drivable", "marginal", "non-drivable", "unknown"]
@@ -91,7 +117,13 @@ def sector_features(stats: dict) -> dict:
     nr, na = stats["n_radial"], stats["n_azimuth"]
     step = np.zeros(nr * na)
     _sector_step(stats["h"], stats["n"], nr, na, step)
+    # centre range of each radial ring. remove_ground bins radius as
+    # sqrt(r/max_range), so invert that to recover metres.
+    ring = np.arange(nr)
+    r_edge = ((ring + 0.5) / nr) ** 2 * stats["max_range"]
+    rng = np.repeat(r_edge, na)
     return {
+        "range": rng,
         "slope_deg": np.degrees(np.arctan(stats["slope"])),
         "rough": stats["rough"],
         "step": step,
@@ -104,19 +136,33 @@ def sector_features(stats: dict) -> dict:
 def classify_sectors(feat: dict,
                      max_slope_deg: float = MAX_SLOPE_DEG,
                      max_step: float = MAX_STEP_M,
-                     max_rough: float = MAX_ROUGH_M) -> np.ndarray:
-    """Drivability per sector.
+                     max_rough: float = MAX_ROUGH_M,
+                     rough_d_sf: float = ROUGH_D_SF,
+                     step_d_sf: float = STEP_D_SF) -> np.ndarray:
+    """Drivability per sector, with range-dependent tolerances.
 
     Marginal rather than binary: a surface that violates one criterion mildly is
     not the same as one that violates all three, and a planner wants the
     difference. Anything with too few ground points is unknown, not drivable --
     absence of evidence is not evidence of road.
+
+    Note that the slope test is kept for off-road generality but does no work in
+    the city: sweeping it over 10, 15 and 20 degrees on KITTI ROAD gave
+    bit-identical results, because urban roads are flat (measured median slope
+    0.94 deg, p95 7.7). Roughness and step carry the whole signal here.
     """
     out = np.full(len(feat["slope_deg"]), UNKNOWN, np.uint8)
     v = feat["valid"]
+    d = feat.get("range")
+    if d is None:
+        rough_t = np.full(len(out), max_rough)
+        step_t = np.full(len(out), max_step)
+    else:
+        rough_t = max_rough + rough_d_sf * d * d
+        step_t = max_step + step_d_sf * d * d
     bad = ((feat["slope_deg"] > max_slope_deg).astype(np.int8)
-           + (feat["step"] > max_step).astype(np.int8)
-           + (feat["rough"] > max_rough).astype(np.int8))
+           + (feat["step"] > step_t).astype(np.int8)
+           + (feat["rough"] > rough_t).astype(np.int8))
     out[v & (bad == 0)] = DRIVABLE
     out[v & (bad == 1)] = MARGINAL
     out[v & (bad >= 2)] = NON_DRIVABLE
