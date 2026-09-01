@@ -37,6 +37,8 @@ import json
 import time
 from pathlib import Path
 
+import io
+
 import numpy as np
 import torch
 
@@ -46,12 +48,55 @@ from .config import Config
 from .dataset import ANCHORS, _rot_z
 from .ground import remove_ground
 from .kitti import read_velodyne
-from .terrain import DRIVABLE, MARGINAL, NON_DRIVABLE, analyse
+from .terrain import (DRIVABLE, MARGINAL, NON_DRIVABLE, TerrainTracker,
+                      analyse, drivability_score, sector_features)
 from .model import build
 
 # KITTI's left colour camera spans roughly +/-40 degrees. Matching it keeps the
 # model inside the distribution it was trained on.
 FOV_DEG = 40.0
+
+def load_raw_calib(drive: Path):
+    """Raw KITTI splits calibration across two files, unlike the detection set.
+
+    calib_velo_to_cam.txt gives R (3x3) and T (3x1); calib_cam_to_cam.txt gives
+    R_rect_00 and P_rect_02. Assemble them into the same projection chain the
+    detection benchmark ships pre-joined:  uv ~ P_rect_02 . R_rect . [R|T] . p
+    """
+    d = None
+    for c in drive.rglob("calib_cam_to_cam.txt"):
+        d = c.parent
+        break
+    if d is None:
+        return None
+
+    def vals(path, key):
+        for line in Path(path).read_text().splitlines():
+            if line.startswith(key + ":"):
+                return np.array([float(v) for v in line.split(":", 1)[1].split()])
+        return None
+
+    R = vals(d / "calib_velo_to_cam.txt", "R").reshape(3, 3)
+    T = vals(d / "calib_velo_to_cam.txt", "T").reshape(3, 1)
+    R_rect = vals(d / "calib_cam_to_cam.txt", "R_rect_00").reshape(3, 3)
+    P2 = vals(d / "calib_cam_to_cam.txt", "P_rect_02").reshape(3, 4)
+    size = vals(d / "calib_cam_to_cam.txt", "S_rect_02")
+    return {"V2C": np.hstack([R, T]), "R0": R_rect, "P2": P2,
+            "W": int(size[0]), "H": int(size[1])}
+
+
+def project(pts, calib):
+    """(N,3) velodyne -> (N,2) pixels and a mask of what the camera can see."""
+    h = np.hstack([pts, np.ones((len(pts), 1))])
+    cam = (calib["R0"] @ (calib["V2C"] @ h.T)).T
+    ph = np.hstack([cam, np.ones((len(cam), 1))])
+    uv = (calib["P2"] @ ph.T).T
+    z = uv[:, 2:3]
+    uv = uv[:, :2] / np.where(np.abs(z) < 1e-6, 1e-6, z)
+    vis = ((cam[:, 2] > 0.5) & (uv[:, 0] >= 0) & (uv[:, 0] < calib["W"])
+           & (uv[:, 1] >= 0) & (uv[:, 1] < calib["H"]))
+    return uv, vis
+
 
 CLS_UNSCORED = 0
 CLS_DRIVABLE, CLS_MARGINAL, CLS_NONDRIV = 1, 2, 3
@@ -64,7 +109,7 @@ _TERR = {DRIVABLE: CLS_DRIVABLE, MARGINAL: CLS_MARGINAL,
 
 
 @torch.no_grad()
-def process(pts, cfg, model, device):
+def process(pts, cfg, model, device, tracker=None):
     """One sweep. Returns (per-point class, boxes, timings, counts)."""
     t = {}
     N = len(pts)
@@ -80,7 +125,14 @@ def process(pts, cfg, model, device):
     # Drivability over the whole sweep, not just the trained field of view:
     # it is geometry, so unlike the classifier it is valid everywhere.
     t0 = time.perf_counter()
-    terr = analyse(pts[:, :3], is_ground, stats)
+    if tracker is not None:
+        feat = sector_features(stats)
+        sc = drivability_score(feat, n_radial=stats["n_radial"],
+                               n_azimuth=stats["n_azimuth"])
+        sc = tracker.update(sc)
+        terr = analyse(pts[:, :3], is_ground, stats, score=sc)
+    else:
+        terr = analyse(pts[:, :3], is_ground, stats)
     t["terrain"] = (time.perf_counter() - t0) * 1000
 
     cls = np.full(N, CLS_UNSCORED, np.uint8)
@@ -190,6 +242,13 @@ def main() -> None:
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--points", type=int, default=5000,
                     help="points exported per frame (display only)")
+    ap.add_argument("--image-width", type=int, default=512,
+                    help="camera frames are downscaled to this before embedding")
+    ap.add_argument("--image-quality", type=int, default=55)
+    ap.add_argument("--fuse-alpha", type=float, default=0.4,
+                    help="temporal fusion weight for drivability; lower = steadier")
+    ap.add_argument("--no-fuse", action="store_true",
+                    help="disable temporal fusion (per-frame, chatters)")
     a = ap.parse_args()
 
     cfg = Config.load()
@@ -205,6 +264,9 @@ def main() -> None:
     print(f"model      {a.ckpt}  canon={cfg.canon}  "
           f"F1={ck.get('metrics', {}).get('f1_fg', 0):.4f}")
 
+    calib = load_raw_calib(a.drive)
+    print(f"calibration {'loaded' if calib else 'NOT FOUND - overlay disabled'}")
+
     scans = sorted(a.drive.rglob("velodyne_points/data/*.bin"))
     if a.max_frames:
         scans = scans[:a.max_frames]
@@ -213,12 +275,23 @@ def main() -> None:
     print(f"drive      {len(scans)} consecutive sweeps")
 
     np.random.seed(0)
+    tracker = None if a.no_fuse else TerrainTracker(alpha=a.fuse_alpha)
+    print(f"terrain fusion   {'off' if tracker is None else f'EMA alpha={a.fuse_alpha}'}")
     frames, blob = [], bytearray()
+    # Three separate runs -- all u, then all v, then all classes -- rather than
+    # interleaving 5 bytes per point. Interleaved, a frame with an odd point
+    # count leaves the next frame starting on an odd byte, and Int16Array
+    # refuses a byte offset that is not a multiple of 2. Grouping by field means
+    # each typed array is built once over its own contiguous run and per-frame
+    # slices are taken in elements, where alignment cannot go wrong.
+    cam_u, cam_v, cam_c = [], [], []
+    images = []
+    IMG_W = a.image_width
     tot = {"ground": 0.0, "terrain": 0.0, "cluster": 0.0, "infer": 0.0}
 
     for n, sp in enumerate(scans):
         pts = read_velodyne(sp)
-        cls, boxes, t, ncl = process(pts, cfg, model, cfg.device)
+        cls, boxes, t, ncl = process(pts, cfg, model, cfg.device, tracker)
         for k in tot:
             tot[k] += t[k]
 
@@ -234,9 +307,34 @@ def main() -> None:
         q = np.clip(np.round(pts[keep, :3] * 50), -32768, 32767).astype(np.int16)
         blob += q.tobytes() + cls[keep].astype(np.uint8).tobytes()
 
+        # ---- camera overlay -------------------------------------------- #
+        # Project the same displayed points into the image and keep only what
+        # the camera can actually see, so the overlay is a genuine reprojection
+        # of the prediction rather than a redrawn approximation of it.
+        n_cam = 0
+        if calib is not None:
+            uv, vis = project(pts[keep, :3].astype(np.float64), calib)
+            sc = IMG_W / calib["W"]
+            cu = np.clip(np.round(uv[vis, 0] * sc), 0, 32767).astype(np.int16)
+            cv = np.clip(np.round(uv[vis, 1] * sc), 0, 32767).astype(np.int16)
+            cc = cls[keep][vis].astype(np.uint8)
+            cam_u.append(cu); cam_v.append(cv); cam_c.append(cc)
+            n_cam = int(vis.sum())
+
+            img_p = sp.parent.parent.parent / "image_02" / "data" / f"{sp.stem}.png"
+            if img_p.exists():
+                from PIL import Image
+                im = Image.open(img_p).convert("RGB")
+                im = im.resize((IMG_W, int(round(im.height * sc))), Image.BILINEAR)
+                buf = io.BytesIO()
+                im.save(buf, "JPEG", quality=a.image_quality, optimize=True)
+                images.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+            else:
+                images.append("")
+
         frames.append({
             "n": int(len(keep)), "raw": int(len(pts)),
-            "cl": ncl, "d": boxes,
+            "cl": ncl, "d": boxes, "nc": n_cam,
             "t": {k: round(v, 1) for k, v in t.items()},
         })
         if (n + 1) % 20 == 0:
@@ -254,6 +352,17 @@ def main() -> None:
                   "ctr_err": round(float(ck.get("metrics", {}).get("ctr_err", 0)), 2),
                   "yaw_err": round(float(ck.get("metrics", {}).get("yaw_err", 0)), 1)},
         "blob": base64.b64encode(bytes(blob)).decode("ascii"),
+        "cam": {
+            "blob": base64.b64encode(
+                (np.concatenate(cam_u).tobytes() if cam_u else b"")
+                + (np.concatenate(cam_v).tobytes() if cam_v else b"")
+                + (np.concatenate(cam_c).tobytes() if cam_c else b"")
+            ).decode("ascii"),
+            "total": int(sum(len(x) for x in cam_u)),
+            "images": images,
+            "w": IMG_W,
+            "h": int(round(calib["H"] * IMG_W / calib["W"])) if calib else 0,
+        } if calib is not None else None,
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(payload))
@@ -265,6 +374,9 @@ def main() -> None:
     print(f"                 total {(sum(tot.values()))/nf:.1f} ms  "
           f"= {1000*nf/sum(tot.values()):.1f} FPS")
     print(f"detections       {sum(len(f['d']) for f in frames)} over {nf} frames")
+    if images:
+        mb = sum(len(i) for i in images) / 1e6
+        print(f"camera overlay   {len(images)} frames, {mb:.2f} MB of JPEG")
     print(f"wrote            {a.out}  {a.out.stat().st_size/1e6:.2f} MB")
 
 

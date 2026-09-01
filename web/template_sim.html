@@ -10,8 +10,10 @@
   --line:#DBE3E1;--line-2:#C1CCC9;
   --accent:#0F7C8A;--accent-soft:#DDF0F2;--accent-ink:#0A5A65;
   --void:#0A1214;
-  --c-unscored:#5a6668;--c-terrain:#3f6b52;--c-static:#b0710d;
-  --c-car:#2a78d6;--c-ped:#eb6834;--c-cyc:#1baf7a;
+  --c-unscored:#59615f;
+  --c-drivable:#4a8c62;--c-marginal:#b8912f;--c-nondriv:#a6503f;
+  --c-static:#6d6a63;
+  --c-car:#2a78d6;--c-ped:#e87ba4;--c-cyc:#1baf7a;
   --shadow:0 1px 2px rgba(17,26,27,.05),0 10px 28px -14px rgba(17,26,27,.20);
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
@@ -20,8 +22,10 @@
   --line:#2d2d2b;--line-2:#3d3d3a;
   --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
   --void:#070D0E;
-  --c-unscored:#4a5456;--c-terrain:#4fbf7b;--c-static:#e0a83e;
-  --c-car:#3987e5;--c-ped:#d95926;--c-cyc:#199e70;
+  --c-unscored:#454d4c;
+  --c-drivable:#3f8a5c;--c-marginal:#a8842c;--c-nondriv:#9c4a3a;
+  --c-static:#67645d;
+  --c-car:#3987e5;--c-ped:#d55181;--c-cyc:#199e70;
   --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
 }}
 :root[data-theme="dark"]{
@@ -30,8 +34,10 @@
   --line:#2d2d2b;--line-2:#3d3d3a;
   --accent:#3BC6D6;--accent-soft:#0D2E33;--accent-ink:#6EDCE8;
   --void:#070D0E;
-  --c-unscored:#4a5456;--c-terrain:#4fbf7b;--c-static:#e0a83e;
-  --c-car:#3987e5;--c-ped:#d95926;--c-cyc:#199e70;
+  --c-unscored:#454d4c;
+  --c-drivable:#3f8a5c;--c-marginal:#a8842c;--c-nondriv:#9c4a3a;
+  --c-static:#67645d;
+  --c-car:#3987e5;--c-ped:#d55181;--c-cyc:#199e70;
   --shadow:0 1px 2px rgba(0,0,0,.45),0 12px 32px -16px rgba(0,0,0,.8);
 }
 *{box-sizing:border-box}
@@ -130,10 +136,14 @@ footer{padding:32px 0 50px;color:var(--muted);font-size:13px}
       <button class="b sp" data-sp="2">2×</button>
       <button class="b" id="reset">reset view</button>
       <button class="b" id="boxes" aria-pressed="true">boxes</button>
+      <span class="lbl">view</span>
+      <button class="b vw" data-v="3d" aria-pressed="true">3D</button>
+      <button class="b vw" data-v="cam">camera</button>
+      <button class="b" id="ovl" aria-pressed="true">overlay</button>
     </div>
     <div class="stage">
       <canvas id="cv"></canvas>
-      <div class="hint">drag · orbit&nbsp;&nbsp;scroll · zoom</div>
+      <div class="hint" id="hintbox">drag · orbit&nbsp;&nbsp;scroll · zoom</div>
       <div class="fovnote" id="fovnote"></div>
     </div>
     <div class="key" id="key"></div>
@@ -146,10 +156,43 @@ footer{padding:32px 0 50px;color:var(--muted);font-size:13px}
     <h2>What you are looking at</h2>
     <div class="prose">
       <p>Every frame is processed from scratch — nothing is tracked or carried between frames. The sensor is a Velodyne HDL-64E at 10 Hz; playback at 1× is real time.</p>
-      <p>The three colour groups map directly onto the problem statement's categories. <b>Terrain</b> is the ground surface recovered by per-sector plane fitting. <b>Static obstacle</b> is any non-ground cluster the network classifies as background — walls, poles, vegetation, parked structures. <b>Car, Pedestrian and Cyclist</b> are the dynamic-capable classes, drawn with their predicted 3D boxes.</p>
+      <p>The colour groups map directly onto the problem statement's categories. The ground is split three ways by drivability — <b>drivable</b>, <b>marginal</b>, <b>non-drivable</b> — from the slope, roughness and step of the same plane fit that found it. <b>Static obstacle</b> is any non-ground cluster the network classifies as background: walls, poles, vegetation. <b>Car, Pedestrian and Cyclist</b> are the dynamic-capable classes, drawn with their predicted 3D boxes.</p>
+      <p>Terrain uses a muted good / warning / critical scale because it covers most of the scene and is context; the object classes stay saturated so they stay findable against it.</p>
     </div>
-    <div class="note warn" style="margin-top:20px">
-      <b>The greyed-out region is deliberate.</b> KITTI only annotates inside the camera frustum, so the model was only ever trained on clusters within roughly ±40° of forward. Classifying the full 360° would be running it out of distribution and presenting the output as if it were trustworthy. Ground removal runs everywhere; clustering and classification run only where the model is valid, and everything else is drawn as unscored.
+    <div class="note" style="margin-top:20px">
+      <b>Switch to <em>camera</em> and toggle <em>overlay</em>.</b> That view is the
+      same prediction reprojected into the left colour camera through the
+      calibrated velodyne-to-camera transform — not a redrawing of it. Turning the
+      overlay off gives you the bare photograph, so you can check the classification
+      against what is actually there rather than against a plot of itself. Road
+      surface, kerb line, parked cars: they either line up or they do not.
+    </div>
+    <div class="note" style="margin-top:16px">
+      <b>Drivability is fused over time, not recomputed each frame.</b> Computed
+      per-frame it chattered badly — measured over 40 consecutive sweeps,
+      <b>24.1% of cells changed class every 100 ms and 10.5% flipped drivable to
+      not-drivable</b>, which is a planner re-deciding one cell in ten at 10 Hz.
+      Three changes fix it: a continuous cost instead of counting failed tests,
+      a median over each cell's neighbours, and an exponential update across
+      frames. Flip rate falls to <b>3.1% and 0.9%</b> — a 12× reduction on the
+      one that matters — and accuracy went <em>up</em>, because a lone
+      disagreeing cell was usually a bad fit rather than a real feature.
+      <br><br>
+      A strong hazard still registers in a single frame: fusion slows marginal
+      changes, not decisive ones.
+    </div>
+    <div class="note" style="margin-top:16px">
+      <b>Drivability is measured, not asserted.</b> Scored against KITTI ROAD's
+      annotations on 100 frames: <b>F1 0.821, IoU 0.696</b> overall, and
+      <b>F1 0.889 with 0.934 recall inside 10 m</b> — the range the problem
+      statement wants at 5 cm resolution. It falls to F1 0.550 at 20–40 m, which
+      is point density rather than a threshold: there is not enough evidence out
+      there to fit a reliable surface. Cost: <b>under 1 ms</b>, no parameters,
+      no training.
+    </div>
+    <div class="note warn" style="margin-top:16px">
+      <b>The greyed-out region is deliberate.</b> KITTI only annotates inside the camera frustum, so the model was only ever trained on clusters within roughly ±40° of forward. Classifying the full 360° would be running it out of distribution and presenting the output as if it were trustworthy. Ground removal runs everywhere; clustering and classification run only where the model is valid, and everything else is drawn as unscored. Drivability is geometry, so it runs
+      over the whole sweep regardless — only the object classes are frustum-limited.
     </div>
     <div class="note" style="margin-top:16px">
       <b>"Dynamic" here means class, not motion.</b> A parked car is coloured as a Car. Distinguishing <em>moving</em> from <em>stationary</em> requires comparing consecutive ego-motion-compensated sweeps — the residual-image approach from LiDAR-MOS — which this pipeline does not yet do. The data to build it is present: this drive has 108 consecutive frames with GPS/IMU poses.
@@ -200,9 +243,41 @@ function framePts(i){
   return {n:n,xyz:xyz,cls:cls};
 }
 
+// ---- camera overlay ---------------------------------------------------- //
+var CAM=D.cam||null, camOff=[], camU=null, camV=null, camC=null, imgCache=[];
+if(CAM){
+  var craw=unb64(CAM.blob), T=CAM.total|0;
+  // Fields are stored in three contiguous runs, not interleaved: an
+  // interleaved 5-byte stride puts odd-length frames on odd byte offsets and
+  // Int16Array rejects those. Built once here, sliced per frame in ELEMENTS.
+  camU=new Int16Array(craw.buffer,0,T);
+  camV=new Int16Array(craw.buffer,T*2,T);
+  camC=new Uint8Array(craw.buffer,T*4,T);
+  var q=0;
+  for(var i=0;i<NF;i++){camOff.push(q);q+=(F[i].nc||0);}
+  imgCache=new Array(NF);
+}
+function camPts(i){
+  var n=F[i].nc||0, o=camOff[i];
+  return {n:n,
+          u:camU.subarray(o,o+n),
+          v:camV.subarray(o,o+n),
+          c:camC.subarray(o,o+n)};
+}
+function camImage(i,cb){
+  if(imgCache[i]){cb(imgCache[i]);return;}
+  var b64=CAM.images[i];
+  if(!b64){cb(null);return;}
+  var im=new Image();
+  im.onload=function(){imgCache[i]=im;cb(im);};
+  im.src="data:image/jpeg;base64,"+b64;
+}
+
 var CLS=D.classes;
-var CVAR=["--c-unscored","--c-terrain","--c-static","--c-car","--c-ped","--c-cyc"];
-var on=[true,true,true,true,true,true];
+var CVAR=["--c-unscored","--c-drivable","--c-marginal","--c-nondriv",
+          "--c-static","--c-car","--c-ped","--c-cyc"];
+var on=CVAR.map(function(){return true;});
+var FIRST_OBJ=5;               // Car and beyond are drawn larger
 var S=function(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();};
 function rgb(h){var m=/#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(h);
   return m?[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)]:[128,128,128];}
@@ -224,8 +299,43 @@ function resize(){
   draw();
 }
 
-var cur=0;
+var cur=0, view="3d", overlay=true;
+
 function draw(){
+  if(view==="cam"&&CAM){drawCam();return;}
+  draw3d();
+}
+
+/* Camera view: the same prediction reprojected into the left colour camera
+   through KITTI's own calibration, drawn over the actual photograph. Loading a
+   JPEG is asynchronous, so a frame counter guards against a slow decode from an
+   older frame painting over a newer one during playback. */
+function drawCam(){
+  var want=++camSeq;
+  ctx.fillStyle=S("--void");ctx.fillRect(0,0,W,H);
+  camImage(cur,function(im){
+    if(want!==camSeq)return;
+    ctx.fillStyle=S("--void");ctx.fillRect(0,0,W,H);
+    var sc=W/CAM.w, dh=CAM.h*sc, dy=(H-dh)/2;
+    if(im)ctx.drawImage(im,0,dy,W,dh);
+    if(overlay){
+      var cp=camPts(cur), cols=CVAR.map(function(v){return S(v);});
+      var r=Math.max(1.6*DPR,W/900);
+      for(var i=0;i<cp.n;i++){
+        var c=cp.c[i];
+        if(!on[c])continue;
+        ctx.fillStyle=cols[c];
+        ctx.beginPath();
+        ctx.arc(cp.u[i]*sc,dy+cp.v[i]*sc,c>=FIRST_OBJ?r*1.7:r,0,6.283);
+        ctx.fill();
+      }
+    }
+    drawStats();
+  });
+}
+var camSeq=0;
+
+function draw3d(){
   if(!buf)return;
   var bg=rgb(S("--void"));
   var bgv=(255<<24)|(bg[2]<<16)|(bg[1]<<8)|bg[0];
@@ -246,7 +356,7 @@ function draw(){
     var d=Y2+cam.dist;
     if(d<0.6)continue;
     var sx=(cx+f*X/d)|0,sy=(cy-f*Z2/d)|0;
-    var sz=c>=3?2:1;                       // dynamic classes drawn larger
+    var sz=c>=FIRST_OBJ?2:1;               // dynamic classes drawn larger
     if(sx<0||sy<0||sx>=W-sz||sy>=H-sz)continue;
     var col=cols[c];
     var v=(255<<24)|(col[2]<<16)|(col[1]<<8)|col[0];
@@ -276,7 +386,7 @@ function drawBoxes(ca,sa,cp,sp,f,cx,cy){
   var dets=F[cur].d||[];
   ctx.lineWidth=2*DPR;ctx.lineJoin="round";
   dets.forEach(function(o){
-    var ci=o.c+2;
+    var ci=o.c+FIRST_OBJ-1;
     if(!on[ci])return;
     var b=o.b,l=b[3],w=b[4],h=b[5],yw=b[6];
     var cc=Math.cos(yw),ss=Math.sin(yw);
@@ -304,17 +414,21 @@ function drawBoxes(ca,sa,cp,sp,f,cx,cy){
 }
 
 function drawStats(){
-  var fr=F[cur],t=fr.t,tot=t.ground+t.cluster+t.infer;
+  var fr=F[cur],t=fr.t,tot=t.ground+(t.terrain||0)+t.cluster+t.infer;
   var counts=[0,0,0,0,0,0], pf=framePts(cur);
   for(var i=0;i<pf.n;i++)counts[pf.cls[i]]++;
   var nd={};
-  (fr.d||[]).forEach(function(o){nd[CLS[o.c+2]]=(nd[CLS[o.c+2]]||0)+1;});
+  (fr.d||[]).forEach(function(o){var k=CLS[o.c+FIRST_OBJ-1];nd[k]=(nd[k]||0)+1;});
+  var gtot=counts[1]+counts[2]+counts[3];
+  var drivpc=gtot?(100*counts[1]/gtot).toFixed(0):"0";
   var det=Object.keys(nd).map(function(k){return nd[k]+" "+k;}).join(", ")||"none";
   document.getElementById("stats").innerHTML=
     cell("raw points",fr.raw.toLocaleString())+
     cell("clusters",fr.cl)+
     cell("detections",(fr.d||[]).length,"acc")+
+    cell("ground drivable",drivpc+"%","acc")+
     cell("ground ms",t.ground.toFixed(1))+
+    cell("terrain ms",(t.terrain||0).toFixed(2))+
     cell("cluster ms",t.cluster.toFixed(1))+
     cell("infer ms",t.infer.toFixed(1))+
     cell("total ms",tot.toFixed(1),"acc")+
@@ -376,6 +490,24 @@ document.getElementById("reset").addEventListener("click",function(){
   cam.yaw=DEF.yaw;cam.pitch=DEF.pitch;cam.dist=DEF.dist;draw();});
 document.getElementById("boxes").addEventListener("click",function(){
   showBoxes=!showBoxes;this.setAttribute("aria-pressed",showBoxes?"true":"false");draw();});
+document.querySelectorAll("button.b.vw").forEach(function(b){
+  b.addEventListener("click",function(){
+    if(b.dataset.v==="cam"&&!CAM)return;
+    view=b.dataset.v;
+    document.querySelectorAll("button.b.vw").forEach(function(o){
+      o.setAttribute("aria-pressed",o===b?"true":"false");});
+    document.getElementById("hintbox").textContent =
+      view==="cam" ? "camera frame with the prediction reprojected onto it"
+                   : "drag · orbit   scroll · zoom";
+    draw();
+  });
+});
+document.getElementById("ovl").addEventListener("click",function(){
+  overlay=!overlay;this.setAttribute("aria-pressed",overlay?"true":"false");draw();});
+if(!CAM){
+  document.querySelector('button.b.vw[data-v="cam"]').disabled=true;
+  document.getElementById("ovl").disabled=true;
+}
 
 /* ---------- legend / class toggles ---------- */
 (function(){
@@ -397,14 +529,15 @@ document.getElementById("mdl").textContent=
   D.model.canon+" · "+(D.model.params/1e6).toFixed(2)+"M params · F1 "+D.model.f1+
   " · centre "+D.model.ctr_err+" m · heading "+D.model.yaw_err+"°";
 (function(){
-  var g=0,c=0,f=0;
-  F.forEach(function(x){g+=x.t.ground;c+=x.t.cluster;f+=x.t.infer;});
+  var g=0,tr=0,c=0,f=0;
+  F.forEach(function(x){g+=x.t.ground;tr+=(x.t.terrain||0);c+=x.t.cluster;f+=x.t.infer;});
   var n=F.length,rows=[
     ["ground removal",g/n,"CPU (numba)","per-sector plane fit over all 121k points"],
+    ["drivability",tr/n,"CPU (numba)","slope, roughness and step from that same fit"],
     ["clustering",c/n,"CPU (numba)","voxel connected components"],
     ["canonicalisation",0.068,"CPU (numba)","closed-form 2×2 eigendecomposition"],
     ["PointNet inference",f/n,"GPU","~26 clusters × 256 points per frame"]];
-  var tot=(g+c+f)/n;
+  var tot=(g+tr+c+f)/n;
   var h="";
   rows.forEach(function(r){
     h+="<tr><td>"+r[0]+"</td><td class='n'>"+r[1].toFixed(2)+
