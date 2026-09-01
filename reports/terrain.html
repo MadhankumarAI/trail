@@ -13,6 +13,13 @@ header{padding:16px 20px;border-bottom:1px solid var(--line)}
 h1{margin:0 0 4px;font-size:16px;font-weight:600;letter-spacing:.2px}
 .sub{color:var(--dim);font-size:12px}
 .wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:14px 20px}
+.wrap3{grid-template-columns:1fr 1fr 1fr}
+.wrap3.nocam{grid-template-columns:1fr 1fr}
+@media (max-width:1200px){.wrap3{grid-template-columns:1fr}}
+.camnote{color:var(--dim);font-size:11px;margin-top:6px}
+table.dets{margin-top:10px}
+table.dets th,table.dets td{padding:3px 6px;font-size:11px}
+table.dets td:first-child{color:var(--ink)}
 .panel{background:var(--pan);border:1px solid var(--line);border-radius:8px;
        padding:10px;min-width:0}
 .ptitle{display:flex;justify-content:space-between;align-items:baseline;
@@ -96,7 +103,7 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   </div>
 </div>
 
-<div class="wrap">
+<div class="wrap wrap3" id="maprow">
   <div class="panel">
     <div class="ptitle"><b>Single frame</b><span id="s1"></span></div>
     <canvas id="c1" width="620" height="620"></canvas>
@@ -105,20 +112,20 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
     <div class="ptitle"><b>Accumulated map</b><span id="s2"></span></div>
     <canvas id="c2" width="620" height="620"></canvas>
   </div>
-</div>
-
-<div class="wrap" style="grid-template-columns:1fr" id="camwrap">
-  <div class="panel">
+  <div class="panel" id="camwrap">
     <div class="ptitle"><b>Left colour camera</b>
       <span id="caminfo"></span></div>
     <canvas id="cam" width="560" height="170"></canvas>
-    <div style="color:var(--dim);font-size:11px;margin-top:6px">
-      The same boxes, projected into the image through <code>P2</code> and
-      <code>Tr</code>. This is the check that matters: a box is right if it
-      lands on a car. The camera sees forward only, roughly 90&deg;, while the
-      map is the full 360&deg;, so boxes behind or beside the vehicle have
-      nothing to land on here and are simply absent.
+    <div class="camnote">
+      The same boxes, projected through <code>P2</code> and <code>Tr</code>.
+      This is the check that matters: a box is right if it lands on a car.
+      The detector is itself limited to the forward field of view, so almost
+      every box it emits can be corroborated here &mdash; the terrain layer
+      beside it is the full 360&deg;, and has no such witness behind you.
     </div>
+    <table class="dets"><thead><tr>
+      <th>in view</th><th>score</th><th>range</th><th>heading</th>
+    </tr></thead><tbody id="detbody"></tbody></table>
   </div>
 </div>
 
@@ -484,7 +491,11 @@ const camImg = new Image();
 let camReady = -1;
 
 function drawCam(k) {
-  if (!D.cam) { document.getElementById('camwrap').style.display = 'none'; return; }
+  if (!D.cam) {
+    document.getElementById('camwrap').style.display = 'none';
+    document.getElementById('maprow').classList.add('nocam');
+    return;
+  }
   camc.width = D.cam.w; camc.height = D.cam.h;
   const src = D.cam.images[k];
   if (!src) { camg.fillStyle = '#0b0e13'; camg.fillRect(0, 0, camc.width, camc.height); return; }
@@ -578,6 +589,20 @@ function show(k) {
     const shown = pr.filter(q => q).length;
     document.getElementById('caminfo').textContent =
       shown + ' of ' + (f.box ? f.box.length : 0) + ' boxes in view';
+
+    // list only what the camera can actually corroborate, so the table and
+    // the picture never disagree
+    let dh = '';
+    for (let i = 0; i < pr.length; i++) {
+      if (!pr[i]) continue;
+      const b = f.box[i], deg = b.b[6] * 180 / Math.PI;
+      dh += '<tr><td style="color:' + (OBJCOL[b.c] || '#fff') + '">' +
+            (D.objcls[b.c] || '?') + '</td><td>' + b.s.toFixed(2) + '</td><td>' +
+            Math.hypot(b.b[0], b.b[1]).toFixed(1) + ' m</td><td>' +
+            deg.toFixed(0) + '°</td></tr>';
+    }
+    document.getElementById('detbody').innerHTML =
+      dh || '<tr><td colspan="4" style="color:var(--dim)">nothing in the camera’s view</td></tr>';
   }
   const ek = document.getElementById('elevkey');
   const ok2 = document.getElementById('objkey');
