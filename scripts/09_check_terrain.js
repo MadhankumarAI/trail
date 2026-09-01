@@ -34,7 +34,7 @@ const ids = {};
 function node(id) {
   if (ids[id]) return ids[id];
   const n = {
-    id, checked: id === 'rings', value: '0', max: '0',
+    id, checked: id === 'rings' || id === 'relief', value: '0', max: '0',
     textContent: '', innerHTML: '', style: {},
     classList: { add() {}, remove() {} },
     getContext: () => ctx,

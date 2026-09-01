@@ -135,6 +135,17 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   observed from close range yet. The ahead and behind rows are reported
   separately for that reason.
   <br><br>
+  <b>2.5D, and why that is the cheap option.</b> An elevation map stores one
+  height per cell of a 2D lattice &mdash; a height field, not a volume. That is
+  the representation here: <code>ix, iy</code> on the lattice, a height, its
+  variance, and a drivability class: seven bytes a cell. The accumulated ground
+  layer above is 7,801 cells, 53 KiB. A dense 3D voxel grid over the same
+  footprint would be 360,000 to 1,400,000 cells depending on z-step &mdash; 46
+  to 179 times as many &mdash; to hold information the ground does not have,
+  because a ground surface is exactly one height per column. Planning reduces to
+  two dimensions while slopes, kerbs and steps stay measurable. No stage of this
+  pipeline bins in z.
+  <br><br>
   <b>On the elevation.</b> Switch to 3D and the surface looks nearly flat at
   &times;1, because it is: measured on this map the ground spans 105 cm of
   relief across an 80 m scene, a vertical-to-horizontal ratio of about 1:76.
@@ -146,6 +157,14 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
   the kerb in the top-down view and the ledge in the 3D view are the same
   measurement seen twice. Exaggerate the vertical to see it; every number in
   the table still comes from the true heights.
+  <br><br>
+  <b>2.5D shows this without a camera.</b> The default view shades each cell by
+  the gradient of the height field, so relief reads directly on the flat map
+  &mdash; one pass over the cells, no projection and no depth sort. Measured
+  over these 24 frames, both panels: flat fill 1.1 ms, relief 4.6 ms, 3D
+  projection 10.5 ms per frame. The 3D toggle is kept because a ledge is easier
+  to believe when you can orbit it, but it draws the same height field rather
+  than a different representation, and it is the more expensive way.
   <br><br>
   A viewer showing tall buildings is rendering a different layer: the top
   surface of <i>every</i> occupied cell. This one renders only the ground,
