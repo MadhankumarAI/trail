@@ -74,6 +74,7 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
     <button id="x1">1</button><button id="x8" class="on">8</button
     ><button id="x20">20</button><button id="x50">50</button>
   </span>
+  <label><input type="checkbox" id="objects" checked> objects</label>
   <label><input type="checkbox" id="relief" checked> relief</label>
   <label><input type="checkbox" id="height"> shade by height</label>
   <label><input type="checkbox" id="rings" checked> range rings</label>
@@ -82,6 +83,16 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
     <span class="k"><i class="sw" style="background:var(--mrg)"></i>marginal</span>
     <span class="k"><i class="sw" style="background:var(--non)"></i>non-drivable</span>
     <span class="k"><i class="sw" style="background:var(--unk)"></i>no evidence</span>
+    <span class="k" id="objkey"><i class="sw" style="background:#58a6ff"></i>Car
+      <i class="sw" style="background:#f778ba;margin-left:6px"></i>Pedestrian
+      <i class="sw" style="background:#a371f7;margin-left:6px"></i>Cyclist
+      <i class="sw" style="background:#b48ad9;margin-left:6px"></i>static</span>
+    <span class="k" id="elevkey" style="display:none">
+      <span id="elo"></span>
+      <i style="width:90px;height:11px;border-radius:2px;display:inline-block;
+                background:linear-gradient(90deg,#163a60,#1e6e78,#2d8c5f,
+                #82a546,#cdb455,#c88246,#e1e1e1)"></i>
+      <span id="ehi"></span></span>
   </div>
 </div>
 
@@ -183,11 +194,28 @@ const BUF = { single: b64(D.single), accum: b64(D.accum) };
 // fields plus one byte of class), so with an odd n the next block would start
 // on an odd offset -- Int16Array refuses that. each block is sliced into its
 // own buffer instead of viewed in place, so every offset is zero.
-const OFF = { single: [], accum: [] };
-let os = 0, oa = 0;
+const OFF = { single: [], accum: [], obst: [] };
+let os = 0, oa = 0, ob = 0;
 for (const f of D.frames) {
   OFF.single.push(os); os += 7 * f.ns;
   OFF.accum.push(oa);  oa += 7 * f.na;
+  OFF.obst.push(ob);   ob += 6 * (f.no || 0);   // ix, iy, height above ground
+}
+const OBST = D.obst ? b64(D.obst) : null;
+
+// STATIC OBSTACLES are a layer of the same height field, not a separate world:
+// a column whose top stands above the local ground. They accumulate, because
+// they do not move. Anything the detector called Car, Pedestrian or Cyclist is
+// deliberately absent from here -- it is drawn per frame as a box instead, so a
+// vehicle driving past cannot leave a wall of terrain behind it.
+function obstacles(k) {
+  const n = D.frames[k].no || 0;
+  if (!OBST || !n) return { n: 0 };
+  const blk = OBST.slice(OFF.obst[k], OFF.obst[k] + 6 * n);
+  return { n,
+    ix: new Int16Array(blk, 0, n),
+    iy: new Int16Array(blk, 2 * n, n),
+    hz: new Int16Array(blk, 4 * n, n) };
 }
 
 function cells(which, k) {
@@ -201,6 +229,7 @@ function cells(which, k) {
 }
 
 const COL = ['#2ea043', '#d29922', '#da3633', '#30363d'];
+const OBJCOL = ['', '#58a6ff', '#f778ba', '#a371f7'];   // Car, Pedestrian, Cyclist
 // same palette as RGB, so relief shading can scale it per cell
 const RGB = [[46, 160, 67], [210, 153, 34], [218, 54, 51], [48, 54, 61]];
 
@@ -237,11 +266,38 @@ const c1 = document.getElementById('c1'), c2 = document.getElementById('c2');
 const g1 = c1.getContext('2d'), g2 = c2.getContext('2d');
 const SZ = c1.width, HALF = D.rmax, SC = SZ / (2 * HALF);
 
-function ramp(t) {                       // height shading, blue -> warm
+// HYPSOMETRIC TINT.
+//
+// The first version ramped over the full min..max of the frame. That looked
+// flat for a good reason: on this map the extremes span 3.48 m but the middle
+// 96% of cells span only 1.61 m, so almost every cell landed in a narrow slice
+// of the ramp while 311 outliers ate the rest. The range is now taken from the
+// 2nd and 98th percentiles, which is what makes the camber and kerbs legible.
+const TINT = [
+  [ 22,  58,  96],   // low  - deep blue
+  [ 30, 110, 120],
+  [ 45, 140,  95],
+  [130, 165,  70],
+  [205, 180,  85],
+  [200, 130,  70],
+  [225, 225, 225],   // high - bare white
+];
+
+function ramp(t) {
   t = Math.max(0, Math.min(1, t));
-  const r = Math.round(30 + 200 * t), g = Math.round(90 + 90 * t),
-        b = Math.round(200 - 130 * t);
-  return 'rgb(' + r + ',' + g + ',' + b + ')';
+  const x = t * (TINT.length - 1), i = Math.min(TINT.length - 2, Math.floor(x));
+  const u = x - i, a = TINT[i], b = TINT[i + 1];
+  return [a[0] + (b[0] - a[0]) * u,
+          a[1] + (b[1] - a[1]) * u,
+          a[2] + (b[2] - a[2]) * u];
+}
+
+function robustRange(C) {
+  if (!C.n) return [0, 1];
+  const v = Array.from(C.hz).sort((a, b) => a - b);
+  const lo = v[Math.floor(0.02 * (v.length - 1))] / D.qz;
+  const hi = v[Math.floor(0.98 * (v.length - 1))] / D.qz;
+  return [lo, Math.max(hi, lo + 0.2)];
 }
 
 // ---------------------------------------------------------------- 3D
@@ -257,6 +313,7 @@ function ramp(t) {                       // height shading, blue -> warm
 // carries the meaning and shading it would only compete.
 
 let AZ = 0.62, EL = 0.42, EXAG = 8;
+let LEGEND = [0, 1];
 
 function project(x, y, z, w, h) {
   const ca = Math.cos(AZ), sa = Math.sin(AZ);
@@ -272,11 +329,9 @@ function draw3d(ctx, C, byHeight) {
   ctx.fillStyle = '#0b0e13'; ctx.fillRect(0, 0, SZ, SZ);
   if (!C.n) return;
 
-  let lo = 1e9, hi = -1e9;
-  for (let i = 0; i < C.n; i++) {
-    const h = C.hz[i] / D.qz; if (h < lo) lo = h; if (h > hi) hi = h;
-  }
-  const span = Math.max(hi - lo, 0.3), mid = (lo + hi) / 2;
+  const rr = robustRange(C), lo = rr[0], span = rr[1] - rr[0];
+  LEGEND = rr;
+  const mid = (rr[0] + rr[1]) / 2;
 
   // painter's algorithm: depth from the projected centre of each cell
   const idx = new Int32Array(C.n);
@@ -289,6 +344,7 @@ function draw3d(ctx, C, byHeight) {
   const ord = Array.from(idx).sort((a, b) => dep[b] - dep[a]);
 
   const r = D.res / 2;
+  const OB = (OBJ && C.obst && C.obst.n) ? C.obst : null;
   for (const i of ord) {
     const x = C.ix[i] * D.res, y = C.iy[i] * D.res;
     const z = (C.hz[i] / D.qz - mid) * EXAG;
@@ -296,11 +352,32 @@ function draw3d(ctx, C, byHeight) {
     const b = project(x + r, y - r, z, SZ, SZ);
     const c = project(x + r, y + r, z, SZ, SZ);
     const d = project(x - r, y + r, z, SZ, SZ);
-    ctx.fillStyle = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : COL[C.k[i]];
+    const cc = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : RGB[C.k[i]];
+    ctx.fillStyle = 'rgb(' + (cc[0] | 0) + ',' + (cc[1] | 0) + ',' + (cc[2] | 0) + ')';
     ctx.beginPath();
     ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
     ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
     ctx.closePath(); ctx.fill();
+  }
+
+  // obstacle columns last, so they stand on the surface rather than in it
+  if (OB) {
+    for (let i = 0; i < OB.n; i++) {
+      const x = OB.ix[i] * D.res, y = OB.iy[i] * D.res;
+      const zt = (OB.hz[i] / D.qz) * EXAG * 0.25;
+      const a = project(x - r, y - r, zt, SZ, SZ);
+      const b = project(x + r, y - r, zt, SZ, SZ);
+      const c = project(x + r, y + r, zt, SZ, SZ);
+      const d = project(x - r, y + r, zt, SZ, SZ);
+      const t = Math.max(0, Math.min(1, (OB.hz[i] / D.qz) / 3.0));
+      const v = Math.round(90 + 130 * t);
+      ctx.fillStyle = 'rgb(' + v + ',' + Math.round(v * .85) + ',' +
+                      Math.round(v * 1.25) + ')';
+      ctx.beginPath();
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+      ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
+      ctx.closePath(); ctx.fill();
+    }
   }
 }
 
@@ -308,12 +385,8 @@ function draw(ctx, C, byHeight, showRings) {
   ctx.fillStyle = '#0b0e13'; ctx.fillRect(0, 0, SZ, SZ);
   const px = Math.max(1.5, D.res * SC);
 
-  let lo = 1e9, hi = -1e9;
-  if (byHeight) for (let i = 0; i < C.n; i++) {
-    const h = C.hz[i] / D.qz; if (h < lo) lo = h; if (h > hi) hi = h;
-  }
-  const span = Math.max(hi - lo, 0.5);
-
+  const rr = robustRange(C), lo = rr[0], span = rr[1] - rr[0];
+  LEGEND = rr;
   const relief = document.getElementById('relief').checked;
   const M = relief ? heightIndex(C) : null;
 
@@ -321,18 +394,36 @@ function draw(ctx, C, byHeight, showRings) {
     // vehicle frame: x forward, y left. screen: x up, y left.
     const x = C.ix[i] * D.res, y = C.iy[i] * D.res;
     const sx = SZ / 2 - y * SC, sy = SZ / 2 - x * SC;
-    if (byHeight) {
-      ctx.fillStyle = ramp((C.hz[i] / D.qz - lo) / span);
-    } else if (relief) {
-      const f = shadeOf(M, C, i), c = RGB[C.k[i]];
-      ctx.fillStyle = 'rgb(' + Math.round(Math.min(255, c[0] * f)) + ',' +
-                               Math.round(Math.min(255, c[1] * f)) + ',' +
-                               Math.round(Math.min(255, c[2] * f)) + ')';
+    // colour says WHAT the cell is (or how high), shading says what shape it
+    // is. Multiplying them is the standard elevation-map rendering and keeps
+    // both readable at once.
+    const c = byHeight ? ramp((C.hz[i] / D.qz - lo) / span) : RGB[C.k[i]];
+    if (relief) {
+      const fsh = shadeOf(M, C, i);
+      ctx.fillStyle = 'rgb(' + Math.round(Math.min(255, c[0] * fsh)) + ',' +
+                               Math.round(Math.min(255, c[1] * fsh)) + ',' +
+                               Math.round(Math.min(255, c[2] * fsh)) + ')';
     } else {
-      ctx.fillStyle = COL[C.k[i]];
+      ctx.fillStyle = 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
     }
     ctx.fillRect(sx - px / 2, sy - px / 2, px, px);
   }
+
+  if (OBJ && C.obst && C.obst.n) {
+    const o = C.obst;
+    for (let i = 0; i < o.n; i++) {
+      const x = o.ix[i] * D.res, y = o.iy[i] * D.res;
+      const sx = SZ / 2 - y * SC, sy = SZ / 2 - x * SC;
+      // brightness carries how far the column stands above the ground, so a
+      // kerb-height object and a building do not read the same
+      const t = Math.max(0, Math.min(1, (o.hz[i] / D.qz) / 3.0));
+      const v = Math.round(90 + 130 * t);
+      ctx.fillStyle = 'rgb(' + v + ',' + Math.round(v * 0.85) + ',' +
+                      Math.round(v * 1.25) + ')';
+      ctx.fillRect(sx - px / 2, sy - px / 2, px, px);
+    }
+  }
+  if (OBJ) drawBoxes(ctx, C.boxes);
 
   if (showRings) {
     ctx.strokeStyle = 'rgba(139,148,158,.30)';
@@ -355,12 +446,44 @@ function draw(ctx, C, byHeight, showRings) {
   ctx.closePath(); ctx.fill();
 }
 
+function drawBoxes(ctx, boxes) {
+  if (!boxes) return;
+  ctx.lineWidth = 2;
+  ctx.font = '10px ui-monospace,monospace';
+  for (const bx of boxes) {
+    const b = bx.b, cx = b[0], cy = b[1], l = b[3], w = b[4], yaw = b[6];
+    const ca = Math.cos(yaw), sa = Math.sin(yaw);
+    const pts = [[l / 2, w / 2], [l / 2, -w / 2],
+                 [-l / 2, -w / 2], [-l / 2, w / 2]].map(q => {
+      const x = cx + q[0] * ca - q[1] * sa, y = cy + q[0] * sa + q[1] * ca;
+      return [SZ / 2 - y * SC, SZ / 2 - x * SC];
+    });
+    ctx.strokeStyle = OBJCOL[bx.c] || '#fff';
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath(); ctx.stroke();
+    // a short spur showing which way the box is facing -- a box with no
+    // heading is only half an answer for anything that moves
+    const hx = SZ / 2 - (cy + 1.4 * sa) * SC, hy = SZ / 2 - (cx + 1.4 * ca) * SC;
+    ctx.beginPath();
+    ctx.moveTo((pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2);
+    ctx.lineTo(hx, hy); ctx.stroke();
+    ctx.fillStyle = OBJCOL[bx.c] || '#fff';
+    ctx.fillText((D.objcls[bx.c] || '?') + ' ' + bx.s.toFixed(2),
+                 pts[2][0] + 3, pts[2][1] - 3);
+  }
+}
+
 const tb = document.querySelector('#tbl tbody');
 const pct = v => (100 * v).toFixed(1) + '%';
 
 function show(k) {
   const f = D.frames[k];
   const A = cells('single', k), B = cells('accum', k);
+  // obstacles and boxes belong to the sweep, so both panels get the same ones
+  A.obst = obstacles(k); B.obst = A.obst;
+  A.boxes = f.box; B.boxes = f.box;
   const byH = document.getElementById('height').checked;
   const rg = document.getElementById('rings').checked;
   if (MODE3D) { draw3d(g1, A, byH); draw3d(g2, B, byH); }
@@ -378,6 +501,16 @@ function show(k) {
   h += row('ahead of the vehicle', f.ss, f.sa);
   h += row('behind and beside', f.ssb, f.sab);
   tb.innerHTML = h;
+
+  const ek = document.getElementById('elevkey');
+  const ok2 = document.getElementById('objkey');
+  const bh = document.getElementById('height').checked;
+  ek.style.display = bh ? '' : 'none';
+  ok2.style.display = OBJ ? '' : 'none';
+  if (bh) {
+    document.getElementById('elo').textContent = LEGEND[0].toFixed(2) + ' m';
+    document.getElementById('ehi').textContent = LEGEND[1].toFixed(2) + ' m';
+  }
 }
 
 function row(title, S, A) {
@@ -399,6 +532,7 @@ function row(title, S, A) {
 }
 
 let MODE3D = false;
+let OBJ = true;
 
 function seg(ids, pick, fn) {
   for (const id of ids) {
@@ -436,6 +570,9 @@ function go(k) { cur = k; scrub.value = k; show(k); }
 scrub.oninput = () => go(+scrub.value);
 document.getElementById('height').onchange = () => show(cur);
 document.getElementById('relief').onchange = () => show(cur);
+document.getElementById('objects').onchange = e => {
+  OBJ = e.target.checked; show(cur);
+};
 document.getElementById('rings').onchange = () => show(cur);
 btn.onclick = () => {
   if (timer) { clearInterval(timer); timer = null; btn.textContent = 'Play';

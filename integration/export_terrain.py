@@ -72,6 +72,39 @@ def pack(cx, cy, cls, h, rmax):
     return ix, iy, cls[keep].astype(np.uint8), hz
 
 
+def obstacle_cells(cells, T_w_velo, rmax):
+    """Static-obstacle cells of the 2.5D map, as (ix, iy, height-above-ground).
+
+    An obstacle in a height field is not a separate object list: it is a column
+    whose top stands above the local ground. zmax gives that top, and the cell
+    already knows its own ground height, so the obstacle layer costs one
+    subtraction and no new structure.
+    """
+    n = cells["hist"][:, g.bldg]
+    sel = n >= 3
+    if not sel.any():
+        e16 = np.zeros(0, np.int16)
+        return e16, e16, e16
+
+    c = {k: v[sel] for k, v in cells.items()}
+    cx = (c["ix"] + 0.5) * RES
+    cy = (c["iy"] + 0.5) * RES
+    top = c["zmax"]
+    base = np.where(c["ng"] > 0, c["gsum"] / np.maximum(c["ng"], 1), np.nan)
+
+    inv = np.linalg.inv(T_w_velo)
+    p = A.apply(inv, np.stack([cx, cy, top], 1))
+    q = A.apply(inv, np.stack([cx, cy, np.nan_to_num(base, nan=0.0)], 1))
+    # height above the ground under it where that is known, else above the
+    # sensor's own road plane -- never a raw z, which is measured from the laser
+    hgt = np.where(np.isfinite(base), p[:, 2] - q[:, 2], p[:, 2] + 1.73)
+
+    keep = (np.hypot(p[:, 0], p[:, 1]) <= rmax) & (hgt > 0.30) & (hgt < 8.0)
+    return (np.round(p[keep, 0] / RES).astype(np.int16),
+            np.round(p[keep, 1] / RES).astype(np.int16),
+            np.clip(np.round(hgt[keep] * QZ), 0, 32767).astype(np.int16))
+
+
 def summarise(cx, cy, cls, rmax, ahead=None):
     """Class mix by range band.
 
@@ -106,11 +139,34 @@ def main():
                     help="pointnet-det/src, for the ground segmenter")
     ap.add_argument("--max-frame", type=int, default=40)
     ap.add_argument("--rmax", type=float, default=50.0)
+    ap.add_argument("--ckpt", type=Path, default=None,
+                    help="detector checkpoint; adds the object layer")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
 
     sys.path.insert(0, str(a.pnd))
     from pnd.ground import remove_ground
+
+    # ---- optional object layer -------------------------------------- #
+    model = cfg = process = None
+    if a.ckpt:
+        import torch
+        from pnd.config import Config
+        from pnd.model import build
+        from pnd.simulate import process, CLS_STATIC
+        cfg = Config.load()
+        ck = torch.load(a.ckpt, map_location=cfg.device, weights_only=False)
+        for k in ("canon", "in_ch", "width", "num_classes", "dropout",
+                  "n_points", "cluster_voxel", "min_cluster_pts",
+                  "max_cluster_pts", "ground_thresh", "max_range"):
+            if k in ck["cfg"]:
+                setattr(cfg, k, ck["cfg"][k])
+        model = build(cfg).to(cfg.device)
+        model.load_state_dict(ck["model"])
+        model.eval()
+        np.random.seed(0)
+        print(f"detector {a.ckpt.name}  canon={cfg.canon}  device={cfg.device}  "
+              f"F1={ck.get('metrics', {}).get('f1_fg', 0):.4f}")
 
     T = A.load_poses(a.poses, a.calib)
     files = sorted(a.cache.glob(f"{a.seq}_*.bin"))
@@ -122,29 +178,46 @@ def main():
 
     wm = A.WorldMap()
     frames = []
-    bs, ba = bytearray(), bytearray()
+    bs, ba, bo = bytearray(), bytearray(), bytearray()
 
     for i, f in seq:
-        pts = np.fromfile(f, np.float32).reshape(-1, 4)[:, :3].astype(np.float64)
+        raw = np.fromfile(f, np.float32).reshape(-1, 4).astype(np.float64)
+        pts = raw[:, :3]
         lab = ground_labels(pts, remove_ground)
+
+        # ---- objects ------------------------------------------------- #
+        # Dynamic detections are kept OUT of the persistent map. A car driving
+        # past would otherwise lay down a solid wall of evidence along its whole
+        # path, and that wall would be scored as terrain. Static obstacles do
+        # accumulate: they are static, so more looks at them is simply better.
+        boxes, moving = [], None
+        if model is not None:
+            dcls, boxes, _t, _n, _sc, _sh = process(raw, cfg, model,
+                                                    cfg.device, None)
+            moving = dcls >= CLS_STATIC + 1          # Car / Pedestrian / Cyclist
+            static = dcls == CLS_STATIC
+            lab = np.where(static, g.bldg, lab)
 
         one = tc.coarsen(g.quantise(pts[:, 0], pts[:, 1], pts[:, 2], lab))
         cx1, cy1, c1, h1 = local(one, T[i], use_world=False)
 
-        wm.ingest(pts, lab, T[i])
+        wm.ingest(pts, lab, T[i], moving=moving)
         acc = tc.coarsen(wm.c)
         cx2, cy2, c2, h2 = local(acc, T[i], use_world=True)
 
         ix1, iy1, k1, z1 = pack(cx1, cy1, c1, h1, a.rmax)
         ix2, iy2, k2, z2 = pack(cx2, cy2, c2, h2, a.rmax)
+        ox, oy, oz = obstacle_cells(acc, T[i], a.rmax)
         # grouped by field, never interleaved: an odd cell count would leave
         # the next frame's Int16Array on an odd byte offset, which throws
         bs += ix1.tobytes() + iy1.tobytes() + z1.tobytes() + k1.tobytes()
         ba += ix2.tobytes() + iy2.tobytes() + z2.tobytes() + k2.tobytes()
+        bo += ox.tobytes() + oy.tobytes() + oz.tobytes()
 
         frames.append({
             "i": i,
-            "ns": int(len(ix1)), "na": int(len(ix2)),
+            "ns": int(len(ix1)), "na": int(len(ix2)), "no": int(len(ox)),
+            "box": boxes,
             "dz": round(float(wm.dz) * 100, 2),
             "pose": [round(float(v), 3) for v in T[i][:3, 3]],
             "ss": summarise(cx1, cy1, c1, a.rmax, ahead=True),
@@ -166,6 +239,9 @@ def main():
         "frames": frames,
         "single": base64.b64encode(bytes(bs)).decode("ascii"),
         "accum": base64.b64encode(bytes(ba)).decode("ascii"),
+        "obst": base64.b64encode(bytes(bo)).decode("ascii"),
+        "objcls": ["", "Car", "Pedestrian", "Cyclist"],
+        "hasobj": model is not None,
     }
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(payload))
