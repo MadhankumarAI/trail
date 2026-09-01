@@ -40,12 +40,22 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-# Thresholds from vehicle dynamics rather than tuning. A passenger car manages
-# roughly a 15 degree grade; 10 cm is a typical kerb-mount limit; 5 cm RMS is
-# broken tarmac.
+# Slope and step come from vehicle dynamics: a passenger car manages roughly a
+# 15 degree grade, and 10 cm is a typical kerb-mount limit.
+#
+# The roughness threshold cannot come from dynamics, because it is a property of
+# the *estimator* as much as the terrain. The traversability literature is
+# consistently qualitative here - it names slope, roughness and step as the
+# features and leaves the numbers to the platform - so this one is measured.
+# Swept on KITTI ROAD with MAD scatter: 0.008 -> F1 0.622, 0.016 -> 0.797,
+# 0.020 -> 0.798, 0.025 -> 0.787. Flat-topped around 0.020.
+#
+# It is roughly half the old 0.05 because MAD reads about half of RMS on the
+# same data. Changing the estimator without re-deriving the threshold is what
+# made the first MAD attempt worse, not better.
 MAX_SLOPE_DEG = 15.0
 MAX_STEP_M = 0.10
-MAX_ROUGH_M = 0.05
+MAX_ROUGH_M = 0.020       # MAD, not RMS - see ground.py
 
 # DISTANCE-SCALED TOLERANCE, after GroundGrid (Steinke et al., RA-L 2024), which
 # thresholds cell variance as t = t_min + d_sf * d^2 rather than at a constant.

@@ -46,14 +46,21 @@ from .config import Config
 from .dataset import ANCHORS, _rot_z
 from .ground import remove_ground
 from .kitti import read_velodyne
+from .terrain import DRIVABLE, MARGINAL, NON_DRIVABLE, analyse
 from .model import build
 
 # KITTI's left colour camera spans roughly +/-40 degrees. Matching it keeps the
 # model inside the distribution it was trained on.
 FOV_DEG = 40.0
 
-CLS_UNSCORED, CLS_TERRAIN, CLS_STATIC = 0, 1, 2
-CLS_OFFSET = 2          # Car(1) -> 3, Pedestrian(2) -> 4, Cyclist(3) -> 5
+CLS_UNSCORED = 0
+CLS_DRIVABLE, CLS_MARGINAL, CLS_NONDRIV = 1, 2, 3
+CLS_STATIC = 4
+CLS_OFFSET = 4          # Car(1) -> 5, Pedestrian(2) -> 6, Cyclist(3) -> 7
+
+# terrain.py's DRIVABLE/MARGINAL/NON_DRIVABLE are 0/1/2
+_TERR = {DRIVABLE: CLS_DRIVABLE, MARGINAL: CLS_MARGINAL,
+         NON_DRIVABLE: CLS_NONDRIV}
 
 
 @torch.no_grad()
@@ -67,11 +74,19 @@ def process(pts, cfg, model, device):
     in_fov = (np.abs(az) <= FOV_DEG) & (rng < cfg.max_range) & (rng > 1.0)
 
     t0 = time.perf_counter()
-    is_ground, agl, terr = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
+    is_ground, agl, stats = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
     t["ground"] = (time.perf_counter() - t0) * 1000
 
+    # Drivability over the whole sweep, not just the trained field of view:
+    # it is geometry, so unlike the classifier it is valid everywhere.
+    t0 = time.perf_counter()
+    terr = analyse(pts[:, :3], is_ground, stats)
+    t["terrain"] = (time.perf_counter() - t0) * 1000
+
     cls = np.full(N, CLS_UNSCORED, np.uint8)
-    cls[is_ground] = CLS_TERRAIN                    # terrain everywhere
+    pcls = terr["point_cls"]
+    for k, v in _TERR.items():
+        cls[is_ground & (pcls == k)] = v
 
     work = in_fov & ~is_ground
     idx_work = np.flatnonzero(work)
@@ -199,7 +214,7 @@ def main() -> None:
 
     np.random.seed(0)
     frames, blob = [], bytearray()
-    tot = {"ground": 0.0, "cluster": 0.0, "infer": 0.0}
+    tot = {"ground": 0.0, "terrain": 0.0, "cluster": 0.0, "infer": 0.0}
 
     for n, sp in enumerate(scans):
         pts = read_velodyne(sp)
@@ -209,8 +224,8 @@ def main() -> None:
 
         # subsample for display, keeping every dynamic-class point: they are
         # what the demo is about and there are few of them
-        dyn = np.flatnonzero(cls >= 3)
-        rest = np.flatnonzero(cls < 3)
+        dyn = np.flatnonzero(cls >= CLS_OFFSET + 1)
+        rest = np.flatnonzero(cls < CLS_OFFSET + 1)
         budget = max(a.points - len(dyn), 0)
         if len(rest) > budget:
             rest = np.random.choice(rest, budget, replace=False)
@@ -229,7 +244,8 @@ def main() -> None:
 
     payload = {
         "frames": frames,
-        "classes": ["unscored", "terrain", "static", "Car", "Pedestrian", "Cyclist"],
+        "classes": ["unscored", "drivable", "marginal", "non-drivable",
+                    "static", "Car", "Pedestrian", "Cyclist"],
         "quant": 50,          # int16 units per metre
         "fov": FOV_DEG,
         "model": {"canon": cfg.canon,
@@ -244,6 +260,7 @@ def main() -> None:
 
     nf = len(scans)
     print(f"\nmean per frame:  ground {tot['ground']/nf:.1f} ms   "
+          f"terrain {tot['terrain']/nf:.2f} ms   "
           f"cluster {tot['cluster']/nf:.1f} ms   infer {tot['infer']/nf:.1f} ms")
     print(f"                 total {(sum(tot.values()))/nf:.1f} ms  "
           f"= {1000*nf/sum(tot.values()):.1f} FPS")

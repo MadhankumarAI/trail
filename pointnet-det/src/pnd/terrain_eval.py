@@ -64,7 +64,8 @@ def load_gt(fid: str, split: str = "training"):
     return im[:, :, 2] > 0, im[:, :, 0] > 0        # road, valid
 
 
-def score_frame(fid: str, cfg_thresh: dict, split: str = "training"):
+def score_frame(fid: str, cfg_thresh: dict, split: str = "training",
+                grid: dict | None = None):
     """Confusion counts for one frame, plus a range breakdown."""
     velo = ROAD / split / "velodyne" / f"{fid}.bin"
     calib_p = ROAD / "data_road" / split / "calib" / f"{fid}.txt"
@@ -79,7 +80,7 @@ def score_frame(fid: str, cfg_thresh: dict, split: str = "training"):
     pts = np.fromfile(velo, dtype=np.float32).reshape(-1, 4)
     calib = Calib.from_file(calib_p)
 
-    is_ground, agl, stats = remove_ground(pts[:, :3])
+    is_ground, agl, stats = remove_ground(pts[:, :3], **(grid or {}))
     res = analyse(pts[:, :3], is_ground, stats, **cfg_thresh)
     pred = res["point_cls"]
 
@@ -132,7 +133,7 @@ def main() -> None:
     ap.add_argument("--max-frames", type=int, default=None)
     ap.add_argument("--max-slope", type=float, default=15.0)
     ap.add_argument("--max-step", type=float, default=0.10)
-    ap.add_argument("--max-rough", type=float, default=0.05)
+    ap.add_argument("--max-rough", type=float, default=0.020)
     ap.add_argument("--sweep", action="store_true",
                     help="try a grid of thresholds instead of one setting")
     a = ap.parse_args()
