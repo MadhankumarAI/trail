@@ -103,7 +103,7 @@ def coarsen(c, level=DRIVE_LEVEL):
 def cell_drivability(c, sensor_xy=(0.0, 0.0), res=g.res0 * (1 << DRIVE_LEVEL),
                      max_slope_deg=MAX_SLOPE_DEG, max_step=MAX_STEP_M,
                      max_rough=MAX_ROUGH_M, step_d_sf=STEP_D_SF,
-                     min_pts=MIN_GROUND_PTS):
+                     min_pts=MIN_GROUND_PTS, terms=False):
     """Per-cell drivability cost and class from grid25 accumulators.
 
     Returns (score, cls, height). Score is the worst normalised violation, so
@@ -160,6 +160,16 @@ def cell_drivability(c, sensor_xy=(0.0, 0.0), res=g.res0 * (1 << DRIVE_LEVEL),
     cls[good & (score <= 1.0)] = DRIVABLE
     cls[good & (score > 1.0) & (score <= 2.0)] = MARGINAL
     cls[good & (score > 2.0)] = NON_DRIVABLE
+    if terms:
+        # the three criteria separately, each normalised the same way as the
+        # combined score, so a consumer can see WHICH one condemned a cell --
+        # a kerb and a rubble field are both "non-drivable" and want different
+        # responses from a planner
+        return score, cls, mean, {
+            "rough": np.where(ok, rough / max_rough, np.nan),
+            "step": np.where(ok, step / np.maximum(step_t, 1e-6), np.nan),
+            "slope": np.where(ok, slope_deg / max_slope_deg, np.nan),
+        }
     return score, cls, mean
 
 
