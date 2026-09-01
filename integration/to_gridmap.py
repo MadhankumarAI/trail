@@ -33,7 +33,8 @@ import numpy as np
 import grid25 as g
 import accumulate as A
 import terrain_cells as tc
-from gridmap import GridMap, LAYERS, cost_to_traversability
+from gridmap import (GridMap, LAYERS, cost_to_traversability,
+                     PHYS_SLOPE_DEG, PHYS_STEP_M, PHYS_ROUGH_M)
 
 # bytes a sparse cell costs us: ix, iy (int32) plus one float32 per layer
 SPARSE_BYTES = 8 + 4 * len(LAYERS)
@@ -69,10 +70,23 @@ def build(cells, sensor_xy, res, extent, frame_id="map"):
         "variance": np.maximum(cells["gsq"][ok] / ng[ok]
                                - (cells["gsum"][ok] / ng[ok]) ** 2, 0.0),
         "n_observations": cells["ng"][ok],
-        "traversability": cost_to_traversability(score[ok]),
-        "traversability_slope": cost_to_traversability(term["slope"][ok]),
-        "traversability_step": cost_to_traversability(term["step"][ok]),
-        "traversability_roughness": cost_to_traversability(term["rough"][ok]),
+        # against PHYSICAL limits, so the layer means what a grid_map consumer
+        # expects it to mean
+        "traversability_slope":
+            cost_to_traversability(term["slope_deg"][ok] / PHYS_SLOPE_DEG),
+        "traversability_step":
+            cost_to_traversability(term["step_m"][ok] / PHYS_STEP_M),
+        "traversability_roughness":
+            cost_to_traversability(term["rough_m"][ok] / PHYS_ROUGH_M),
+        "traversability": cost_to_traversability(np.maximum.reduce([
+            term["slope_deg"][ok] / PHYS_SLOPE_DEG,
+            term["step_m"][ok] / PHYS_STEP_M,
+            term["rough_m"][ok] / PHYS_ROUGH_M,
+        ])),
+        # our calibrated verdict, kept separate and explicit:
+        # 1 drivable, 0.5 marginal, 0 non-drivable
+        "drivable": np.choose(np.minimum(cls[ok], 2),
+                              [1.0, 0.5, 0.0]).astype(np.float32),
     })
     oh = obstacle_height(cells)
     has = np.isfinite(oh)

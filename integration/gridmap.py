@@ -68,6 +68,24 @@ mirrored, which is the kind of bug that survives a demo and fails in the field.
 
 import numpy as np
 
+# PHYSICAL limits, for the published traversability layer.
+#
+# These are NOT the thresholds terrain_cells uses to decide drivable. That
+# roughness figure is 4 cm, swept against SemanticKITTI road labels for best
+# F1 -- a decision boundary chosen where the classes separate, which on real
+# tarmac sits right at the median. Publishing 1 - rough/0.04 therefore paints
+# ordinary road as untraversable: measured on seq 00, median traversability
+# 0.14, with 37% of cells at exactly zero.
+#
+# grid_map's demo chain normalises by what the machine can physically manage
+# (slope 0.6 rad, roughness 0.1 m), which is why good ground scores near 1
+# there. The published layer now does the same, and the calibrated decision
+# travels separately in the `drivable` layer, so a consumer gets both without
+# inheriting our calibration by accident.
+PHYS_SLOPE_DEG = 30.0
+PHYS_STEP_M = 0.15
+PHYS_ROUGH_M = 0.10
+
 LAYERS = (
     "elevation",
     "variance",
@@ -76,6 +94,7 @@ LAYERS = (
     "traversability_slope",
     "traversability_step",
     "traversability_roughness",
+    "drivable",
     "obstacle_height",
 )
 

@@ -165,10 +165,14 @@ def cell_drivability(c, sensor_xy=(0.0, 0.0), res=g.res0 * (1 << DRIVE_LEVEL),
         # combined score, so a consumer can see WHICH one condemned a cell --
         # a kerb and a rubble field are both "non-drivable" and want different
         # responses from a planner
+        # RAW physical quantities, not divided by our thresholds. Those
+        # thresholds are a calibrated decision boundary, not a vehicle limit,
+        # so pre-normalising by them would force every consumer to inherit our
+        # calibration whether it suits their platform or not.
         return score, cls, mean, {
-            "rough": np.where(ok, rough / max_rough, np.nan),
-            "step": np.where(ok, step / np.maximum(step_t, 1e-6), np.nan),
-            "slope": np.where(ok, slope_deg / max_slope_deg, np.nan),
+            "rough_m": np.where(ok, rough, np.nan),
+            "step_m": np.where(ok, step, np.nan),
+            "slope_deg": np.where(ok, slope_deg, np.nan),
         }
     return score, cls, mean
 
