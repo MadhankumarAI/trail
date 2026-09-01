@@ -36,7 +36,18 @@ function node(id) {
   const n = {
     id, checked: ['rings', 'relief', 'objects'].includes(id), value: '0', max: '0',
     textContent: '', innerHTML: '', style: {},
-    classList: { add() {}, remove() {} },
+    // real enough to be worth checking: the page reads state back off the
+    // class list, so a no-op stub would hide a stuck toggle
+    _cls: new Set(),
+    classList: {
+      add(c) { n._cls.add(c); },
+      remove(c) { n._cls.delete(c); },
+      toggle(c, on) {
+        if (on === undefined) { n._cls.has(c) ? n._cls.delete(c) : n._cls.add(c); }
+        else if (on) { n._cls.add(c); } else { n._cls.delete(c); }
+      },
+      contains(c) { return n._cls.has(c); },
+    },
     getContext: () => ctx,
     width: 620, height: 620,
     addEventListener() {},
@@ -79,20 +90,30 @@ const tot = { s: 0, a: 0 };
 
 // both view modes, both colour modes, every frame. the 3D path sorts and
 // projects per cell, so a bad index there throws only when it is actually run.
-const views = [['top-down', 'v_top'], ['3D', 'v_3d']];
+const views = [['2.5D', 'v_top'], ['3D', 'v_3d']];
+const ests = [['grid_map', 'e_gm'], ['ours', 'e_our']];
+const cols = [['verdict', 'c_cls'], ['elevation', 'c_h']];
 for (let k = 0; k < D.frames.length; k++) {
-  for (const [vname, vid] of views) {
-    try { ids[vid].onclick(); } catch (e) {
-      console.error(`  view ${vname} toggle THREW: ${e.message}`); bad++;
+  for (const [ename, eid] of ests) {
+    try { ids[eid].onclick(); } catch (e) {
+      console.error(`  estimator ${ename} THREW: ${e.message}`); bad++;
     }
-    for (const mode of [false, true]) {
-      ids['height'].checked = mode;
-      try {
-        globalThis.__show(k);
-      } catch (e) {
-        console.error(`  frame ${k} (${vname}, height=${mode}) THREW: ${e.message}`);
-        bad++;
+    for (const [vname, vid] of views) {
+      try { ids[vid].onclick(); } catch (e) {
+        console.error(`  view ${vname} THREW: ${e.message}`); bad++;
       }
+      for (const [cname, cid] of cols) {
+        try { ids[cid].onclick(); globalThis.__show(k); } catch (e) {
+          console.error(`  frame ${k} (${ename}/${vname}/${cname}) THREW: ${e.message}`);
+          bad++;
+        }
+      }
+    }
+  }
+  // the overlay toggles must survive being switched off and on again
+  for (const tid of ['t_obj', 't_rel', 't_rng']) {
+    try { ids[tid].onclick(); ids[tid].onclick(); } catch (e) {
+      console.error(`  toggle ${tid} THREW: ${e.message}`); bad++;
     }
   }
   // the alignment check that actually matters: the last element of every
@@ -101,7 +122,8 @@ for (let k = 0; k < D.frames.length; k++) {
   if (A.n !== D.frames[k].ns || B.n !== D.frames[k].na) {
     console.error(`  frame ${k}: cell count mismatch`); bad++;
   }
-  if (A.n && (A.k[A.n - 1] > 3 || B.k[B.n - 1] > 3)) {
+  if (A.n && (A.kOur[A.n - 1] > 3 || B.kOur[B.n - 1] > 3 ||
+              A.kGm[A.n - 1] > 3 || B.kGm[B.n - 1] > 3)) {
     console.error(`  frame ${k}: class byte out of range -> misaligned view`);
     bad++;
   }
@@ -113,7 +135,6 @@ for (let k = 0; k < D.frames.length; k++) {
 // measure it rather than assert it. Same frames, same cells, both panels.
 function timeMode(vid, label) {
   ids[vid].onclick();
-  ids['height'].checked = false;
   globalThis.__show(0);                      // warm up
   const t0 = process.hrtime.bigint();
   for (let rep = 0; rep < 5; rep++)
@@ -123,14 +144,13 @@ function timeMode(vid, label) {
   return ms;
 }
 console.log('render cost:');
-ids['relief'].checked = false;
+ids['t_rel'].onclick();                      // relief off
 const tFlat = timeMode('v_top', '2.5D flat');
-ids['relief'].checked = true;
+ids['t_rel'].onclick();                      // relief on
 const tRelief = timeMode('v_top', '2.5D + relief');
 const t3d = timeMode('v_3d', '3D projected');
 console.log(`  -> relief costs ${(tRelief / tFlat).toFixed(2)}x flat, ` +
             `3D costs ${(t3d / tRelief).toFixed(2)}x relief`);
-ids['relief'].checked = true;
 ids['v_top'].onclick();
 console.log('');
 
@@ -145,6 +165,9 @@ console.log(`canvas ops    : ${drawn.rect.toLocaleString()} fillRect, ` +
             `${drawn.quad.toLocaleString()} quad fills, ${drawn.text} fillText`);
 console.log(`table rows    : ${(ids['tbody'].innerHTML.match(/<tr>/g) || []).length}`);
 console.log(`readout       : "${ids['fno'].textContent}"`);
-console.log(`thresholds    : "${ids['thr'].textContent}"`);
+console.log(`headline      : "${ids['k1'].textContent}" no-verdict 10-20 m ahead`);
+console.log(`detections    : ${ids['k3'].textContent}, drift ${ids['k4'].textContent}`);
+console.log(`toggles left on: ` +
+  ['t_obj', 't_rel', 't_rng'].filter(t => ids[t]._cls.has('on')).join(', '));
 console.log(bad ? `\nFAILED with ${bad} error(s)` : '\nOK - no exceptions');
 process.exit(bad ? 1 : 0);
