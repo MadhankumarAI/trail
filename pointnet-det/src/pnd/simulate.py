@@ -123,8 +123,23 @@ _TERR = {DRIVABLE: CLS_DRIVABLE, MARGINAL: CLS_MARGINAL,
 
 
 @torch.no_grad()
-def process(pts, cfg, model, device, tracker=None):
-    """One sweep. Returns (per-point class, boxes, timings, counts)."""
+def process(pts, cfg, model, device, tracker=None, ground=None, terrain=True):
+    """One sweep. Returns (per-point class, boxes, timings, counts).
+
+    `ground` accepts a (is_ground, agl, stats) triple already computed by the
+    caller, and `terrain` turns off the polar drivability estimator.
+
+    Both exist because the 2.5D pipeline was paying for this work twice. It
+    segments ground itself before quantising into the grid, and its drivability
+    comes from the grid cells, not from terrain.py's polar sectors -- yet every
+    call here re-segmented the whole sweep and ran a sector analysis nobody
+    read. Measured: ground 29 ms and terrain 6 ms of a 60 ms accounted budget,
+    so a little over half of this function was recomputing what the caller
+    already had.
+
+    The simulator still wants both, so they stay on by default and the callers
+    that do not need them opt out.
+    """
     t = {}
     N = len(pts)
     xy = pts[:, :2]
@@ -133,13 +148,19 @@ def process(pts, cfg, model, device, tracker=None):
     in_fov = (np.abs(az) <= FOV_DEG) & (rng < cfg.max_range) & (rng > 1.0)
 
     t0 = time.perf_counter()
-    is_ground, agl, stats = remove_ground(pts[:, :3], thresh=cfg.ground_thresh)
+    if ground is None:
+        is_ground, agl, stats = remove_ground(pts[:, :3],
+                                              thresh=cfg.ground_thresh)
+    else:
+        is_ground, agl, stats = ground
     t["ground"] = (time.perf_counter() - t0) * 1000
 
     # Drivability over the whole sweep, not just the trained field of view:
     # it is geometry, so unlike the classifier it is valid everywhere.
     t0 = time.perf_counter()
-    if tracker is not None:
+    if not terrain:
+        terr = None
+    elif tracker is not None:
         feat = sector_features(stats)
         sc = drivability_score(feat, n_radial=stats["n_radial"],
                                n_azimuth=stats["n_azimuth"])
@@ -150,9 +171,10 @@ def process(pts, cfg, model, device, tracker=None):
     t["terrain"] = (time.perf_counter() - t0) * 1000
 
     cls = np.full(N, CLS_UNSCORED, np.uint8)
-    pcls = terr["point_cls"]
-    for k, v in _TERR.items():
-        cls[is_ground & (pcls == k)] = v
+    if terr is not None:
+        pcls = terr["point_cls"]
+        for k, v in _TERR.items():
+            cls[is_ground & (pcls == k)] = v
 
     work = in_fov & ~is_ground
     idx_work = np.flatnonzero(work)
@@ -257,6 +279,9 @@ def process(pts, cfg, model, device, tracker=None):
     # filled wedges. Drawing 5,000 sampled points out of 122,460 makes a
     # perfectly coherent surface look speckled - the sparseness is the sampling,
     # not the classifier.
+    if terr is None:
+        empty = np.zeros(0, np.uint8), np.zeros(0, np.int16)
+        return cls, boxes, t, n_clusters, empty[0], empty[1]
     sec_cls = terr["sector_cls"].astype(np.uint8)
     sec_h = np.clip(np.round(terr["feat"]["h"] * 100), -32768, 32767).astype(np.int16)
     return cls, boxes, t, n_clusters, sec_cls, sec_h

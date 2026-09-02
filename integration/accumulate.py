@@ -127,24 +127,35 @@ _ACC_MIN = ("zmin", "zomin", "gmin")
 _ACC_MAX = ("zmax",)
 
 
-def merge_ext(c, key):
+def merge_ext(c, key, fields=None):
+    """As below, but `fields` restricts which accumulators are reduced.
+
+    Each reduced field costs a gather over the whole array, and a query that
+    only reads five of them should not pay for fifteen.
+    """
+    return _merge_ext(c, key, fields)
+
+
+def _merge_ext(c, key, fields=None):
     """grid25.merge, extended to carry the weighted-ground accumulators.
 
     grid25.merge names its fields explicitly, so it silently drops any extra.
     This does the same reductions by rule instead, leaving grid25 untouched.
     """
     o, st, _ = g._group(key)
+    want = (lambda k: k in c) if fields is None else            (lambda k: k in c and k in fields)
     m = {}
     for k in _ACC_SUM:
-        if k in c:
+        if want(k):
             m[k] = np.add.reduceat(c[k][o], st)
     for k in _ACC_MIN:
-        if k in c:
+        if want(k):
             m[k] = np.minimum.reduceat(c[k][o], st)
     for k in _ACC_MAX:
-        if k in c:
+        if want(k):
             m[k] = np.maximum.reduceat(c[k][o], st)
-    m["hist"] = np.add.reduceat(c["hist"][o], st, axis=0)
+    if fields is None or "hist" in fields:
+        m["hist"] = np.add.reduceat(c["hist"][o], st, axis=0)
     return m, o, st
 
 
@@ -285,6 +296,57 @@ class WorldMap:
         return dz if abs(dz) <= MAX_ALIGN_DZ else 0.0
 
     def _merge(self, a, b):
+        """Fold one sweep into the map WITHOUT rebuilding it.
+
+        The obvious implementation concatenates both sides and re-derives every
+        cell, which is what this used to do. Measured on seq 00 at frame 18:
+        the map held 296,313 cells, the sweep added 44,828 of which 81% already
+        existed, and the full rebuild cost 185 ms -- only 8.5 ms of it the sort.
+        The other 177 ms was fifteen reduceat gathers over 341k elements to
+        update forty thousand.
+
+        So cells that already exist are updated in place. `a` is kept sorted by
+        key (merge_ext returns groups in sorted order) and `b` has unique keys,
+        so searchsorted gives one distinct destination per incoming cell -- no
+        duplicate indices, which is what makes the plain `+=` below safe rather
+        than needing np.add.at.
+
+        Only genuinely new cells are appended, and the sort then runs on those
+        alone.
+        """
+        ka = g._pack(a["ix"], a["iy"])
+        kb = g._pack(b["ix"], b["iy"])
+        pos = np.clip(np.searchsorted(ka, kb), 0, max(len(ka) - 1, 0))
+        hit = (ka[pos] == kb) if len(ka) else np.zeros(len(kb), bool)
+        idx = pos[hit]
+
+        # `a` is self.c and the caller reassigns it, so it is updated in
+        # place. Copying it first cost 15 ms a frame to protect a value nobody
+        # else holds.
+        out = a
+        for k in _ACC_SUM:
+            if k in out and k in b:
+                out[k][idx] += b[k][hit]
+        for k in _ACC_MIN:
+            if k in out and k in b:
+                out[k][idx] = np.minimum(out[k][idx], b[k][hit])
+        for k in _ACC_MAX:
+            if k in out and k in b:
+                out[k][idx] = np.maximum(out[k][idx], b[k][hit])
+        out["hist"][idx] += b["hist"][hit]
+
+        fresh = ~hit
+        if fresh.any():
+            cat = {k: np.concatenate([out[k], b[k][fresh]]) for k in out
+                   if k != "hist"}
+            cat["hist"] = np.concatenate([out["hist"], b["hist"][fresh]])
+            order = np.argsort(g._pack(cat["ix"], cat["iy"]), kind="stable")
+            out = {k: v[order] for k, v in cat.items()}
+
+        np.minimum(out["n"], self.max_obs, out=out["n"])
+        return out
+
+    def _merge_full(self, a, b):
         cat = {k: np.concatenate([a[k], b[k]]) for k in a
                if k not in ("hist",)}
         cat["hist"] = np.concatenate([a["hist"], b["hist"]])
@@ -328,7 +390,10 @@ class WorldMap:
 
         px, py = self.c["ix"] >> lvl, self.c["iy"] >> lvl
         key = (lvl << 62) | ((px & 0x7fffffff) << 31) | (py & 0x7fffffff)
-        m, o, st = merge_ext(self.c, key)
+        # only what the caller reads back. Reducing all fifteen accumulators
+        # costs a gather apiece over the whole map; this query needs five.
+        m, o, st = merge_ext(self.c, key,
+                             fields=("n", "ng", "gsum", "zsum", "hist"))
         m["lvl"] = lvl[o][st]
         m["res"] = self.res * (2.0 ** m["lvl"])
         wx = ((px[o][st] + 0.5) * m["res"])
