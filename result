@@ -728,3 +728,80 @@ frames: 100%|██████████████████████�
   These are end-to-end numbers: an object lost by clustering counts
   as a miss here, unlike the training F1.
 
+
+
+
+
+
+
+  foreground recall 0.910   mean F1 (fg) 0.772
+  centre err 0.40 m   heading err 6.4 deg
+                  ctr m   size m  yaw deg
+  Car              0.36     0.16      5.0
+  Pedestrian       0.19     0.11     15.6
+  Cyclist          0.19     0.10      8.2
+  Van              0.65     0.32      6.5
+  Truck            1.62     0.79     10.6
+  -> new best, saved
+
+best foreground F1 0.7723   -> /home/user02/Downloads/trail/pointnet-det/runs/weighted_box
+loaded ../runs/weighted_box/best.pt   canon=pca2_yaw
+evaluating on 1,496 validation frames
+
+frames: 100%|█████████████████████████████| 1496/1496 [02:03<00:00, 12.08it/s]
+
+==========================================================================
+  1. CLUSTER RECALL  -- the ceiling on everything below
+==========================================================================
+  class               easy    moderate        hard         all
+  ------------------------------------------------------------
+  Car                97.9%       85.7%       82.9%       85.9%
+  Pedestrian         75.1%       67.2%       61.8%       66.7%
+  Cyclist            91.9%       83.2%       81.8%       84.6%
+  Van                94.9%       79.5%       75.6%       79.0%
+  Truck              97.9%       48.6%       50.6%       56.2%
+
+  Objects missed here never reach the network. No amount of
+  classifier accuracy recovers them.
+
+  by range:
+  class             0-20 m     20-40 m       40+ m
+  ------------------------------------------------
+  Car                95.5%       83.3%       25.0%
+  Pedestrian         67.0%       56.1%       12.5%
+  Cyclist            86.4%       88.4%       19.4%
+  Van                99.4%       96.8%       37.9%
+  Truck             100.0%      100.0%       31.7%
+
+==========================================================================
+  2. 3D AP  -- end to end, KITTI protocol
+==========================================================================
+  class          IoU        easy (n)    moderate (n)        hard (n)
+  ------------------------------------------------------------------
+  Car            0.7    29.03 (1182)    31.33 (3188)    29.92 (4416)
+  Pedestrian     0.5     31.72 (454)     31.81 (704)     28.99 (851)
+  Cyclist        0.5     46.83 (161)     49.85 (273)     49.06 (291)
+  Van            0.7       6.88 (78)      8.68 (254)      6.70 (397)
+  Truck          0.7      22.37 (48)      9.19 (138)      7.65 (170)
+
+==========================================================================
+  3. AP vs IoU THRESHOLD  -- is the loss detection, or box geometry?
+==========================================================================
+  A steep fall from 0.3 to 0.7 means objects ARE being found and
+  classified, but the predicted boxes are not tight enough. A flat
+  low line means they are not being found at all.
+
+  class            IoU 0.3     IoU 0.5     IoU 0.7
+  ------------------------------------------------
+  Car                65.92       60.40       31.33
+  Pedestrian         50.92       31.81        1.80
+  Cyclist            56.34       49.85       15.08
+  Van                39.66       35.39        8.68
+  Truck              30.46       20.92        9.19
+
+  (moderate difficulty)
+
+  AP in percent, KITTI 3D protocol. Car is scored at IoU 0.7,
+  Pedestrian and Cyclist at 0.5, matching the official benchmark.
+  These are end-to-end numbers: an object lost by clustering counts
+  as a miss here, unlike the training F1.
