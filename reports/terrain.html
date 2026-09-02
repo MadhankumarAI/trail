@@ -92,10 +92,10 @@ code{background:#171c23;border:1px solid var(--line);padding:1px 5px;
 
 <header>
   <div class="eyebrow">Adaptive 2.5D lidar mapping</div>
-  <h1>Terrain layer &mdash; one sweep against a world-anchored map</h1>
+  <h1>Terrain layer, one sweep against a world-anchored map</h1>
   <div class="lede">Both panels run the same estimator on the same cells; the
     only difference is how much evidence reached each one. Frame 1 favours the
-    left panel &mdash; it holds a single sweep drawn to 50 m against an
+    left panel, it holds a single sweep drawn to 50 m against an
     accumulated map trust-gated to 20 m. Press play; the comparison is what it
     becomes.</div>
   <div class="kpis">
@@ -165,7 +165,7 @@ code{background:#171c23;border:1px solid var(--line);padding:1px 5px;
     <div class="note">Boxes projected through <code>P2</code> and
       <code>Tr</code>. A box is right if it lands on a car. The detector is
       itself forward-only, so nearly everything it emits can be corroborated
-      here &mdash; the terrain layer beside it is the full 360&deg; and has no
+      here, the terrain layer beside it is the full 360&deg; and has no
       such witness behind you.</div>
     <table class="dets"><thead><tr><th>in view</th><th>score</th>
       <th>range</th><th>heading</th></tr></thead>
@@ -194,15 +194,15 @@ code{background:#171c23;border:1px solid var(--line);padding:1px 5px;
   roughness as deviation from the local mean surface. <b>ours</b> takes slope
   as the largest step to a four-neighbour and roughness as the spread inside a
   single cell. Measured against SemanticKITTI road labels grid_map's wins at
-  every operating point &mdash; at a matched 17.5% false-drivable budget,
-  recall 84.7% against 65.7%, AUC 0.894 against 0.829 &mdash; so it is the
+  every operating point, at a matched 17.5% false-drivable budget,
+  recall 84.7% against 65.7%, AUC 0.894 against 0.829, so it is the
   default. Switch between them: they disagree on about a third of cells, most
   of it ground we called marginal that grid_map calls drivable.
 
   <h3>The controls</h3>
   <b>2.5D / 3D</b> draws the same height field straight down, or projected and
   orbitable by dragging; 2.5D is the cheaper. <b>height &times;</b> exaggerates
-  the vertical &mdash; the ground spans about 1 m of relief across 80 m, so at
+  the vertical, the ground spans about 1 m of relief across 80 m, so at
   &times;1 it is a plane. It scales the picture only, never a number.
   <b>relief</b> is hillshading from the gradient of the height field, so kerbs
   and the road crown catch light. <b>objects</b> draws static obstacles as pale
@@ -218,7 +218,7 @@ code{background:#171c23;border:1px solid var(--line);padding:1px 5px;
   map it overlaps. The consequence is that the map reaches much further behind
   the vehicle than in front, so ahead and behind are reported separately. The
   gain is dense memory of ground already driven, and distant terrain resolving
-  properly once approached &mdash; not extra forward reach.
+  properly once approached, not extra forward reach.
 </div>
 
 <script>

@@ -1,6 +1,6 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Adaptive 2.5D — measured results</title>
+<title>Adaptive 2.5D, measured results</title>
 <style>
 .viz-root, body {
   color-scheme: light;
@@ -97,7 +97,7 @@ thead th{color:var(--text-muted);font-weight:600;font-size:10.5px;
   <div class="lede">Every figure below is recomputed from the current code by
     <code>integration/metrics.py</code>, on real KITTI sweeps, so the charts
     cannot drift from the pipeline. Two panels are marked as measured
-    elsewhere — the detector's AP needs the full validation split and a GPU.</div>
+    elsewhere, the detector's AP needs the full validation split and a GPU.</div>
   <div class="meta" id="meta"></div>
 </header>
 
@@ -140,7 +140,7 @@ thead th{color:var(--text-muted);font-weight:600;font-size:10.5px;
   <h2>Traversability estimator: grid_map's filter chain against ours</h2>
   <p class="say" id="say-roc"></p>
   <div class="legend" id="lg-roc"></div>
-  <svg id="c-roc" viewBox="0 0 1000 420"></svg>
+  <svg id="c-roc" viewBox="0 0 1000 440"></svg>
   <button class="tblbtn" data-t="t-roc">Table view</button>
   <div id="t-roc" hidden></div>
   <div class="note" id="n-roc"></div>
@@ -159,17 +159,17 @@ thead th{color:var(--text-muted);font-weight:600;font-size:10.5px;
   <h2>Detection AP as the IoU bar rises</h2>
   <p class="say" id="say-ap"></p>
   <div class="legend" id="lg-ap"></div>
-  <svg id="c-ap" viewBox="0 0 1000 340"></svg>
+  <svg id="c-ap" viewBox="0 0 1000 360"></svg>
   <button class="tblbtn" data-t="t-ap">Table view</button>
   <div id="t-ap" hidden></div>
   <div class="note" id="n-ap"></div>
 </section>
 
 <section>
-  <h2>Cluster recall by range — the ceiling on detection</h2>
+  <h2>Cluster recall by range, the ceiling on detection</h2>
   <p class="say" id="say-cr"></p>
   <div class="legend" id="lg-cr"></div>
-  <svg id="c-cr" viewBox="0 0 1000 340"></svg>
+  <svg id="c-cr" viewBox="0 0 1000 360"></svg>
   <button class="tblbtn" data-t="t-cr">Table view</button>
   <div id="t-cr" hidden></div>
   <div class="note" id="n-cr"></div>
@@ -263,7 +263,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   const bx = x(100);
   el("line", {x1: bx, x2: bx, y1: 14, y2: 150, class: "grid",
               "stroke-dasharray": ""}, svg);
-  el("text", {x: bx + 6, y: 12, class: "ax"}, svg).textContent = "100 ms — 10 Hz budget";
+  el("text", {x: bx + 6, y: 12, class: "ax"}, svg).textContent = "100 ms, 10 Hz budget";
 
   rows.forEach((r, ri) => {
     const y = 34 + ri * 62, h = 34;
@@ -331,7 +331,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
                 "<b>"+fmt(tm.total.p95,1)+"</b>",
                 "<b>"+fmt(tb.total/tm.total.median,1)+"×</b>"]]));
   document.getElementById("n-fps").innerHTML =
-    `File reads are excluded — a sensor hands the points over in memory. ` +
+    `File reads are excluded, a sensor hands the points over in memory. ` +
     `Ground segmentation and detection were not optimised here and are now ` +
     `${fmt(100*(tm.ground.median+tm.detect.median)/tm.total.median,0)}% of the frame; ` +
     `the map layer is ${fmt(100*(tm.accumulate.median+tm.drivability.median)/tm.total.median,0)}%.`;
@@ -359,8 +359,8 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   });
   document.getElementById("say-mem").innerHTML =
     `Both rows are dense allocations over the same 200 m square, so the ` +
-    `comparison isolates <em>foveation</em> — storing what is far away more ` +
-    `coarsely — rather than crediting it with the saving that sparsity gives ` +
+    `comparison isolates <em>foveation</em>, storing what is far away more ` +
+    `coarsely, rather than crediting it with the saving that sparsity gives ` +
     `any hash map. <span class="hl">${fmt(m.reduction,1)}×</span> fewer cells, ` +
     `and the cost is fixed rather than growing with the scene.`;
   table("t-mem", ["tier","cell size","covers","cells"],
@@ -371,7 +371,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   document.getElementById("n-mem").innerHTML =
     `${m.rows_per_cell} accumulators per cell at ${m.bytes_per_value} bytes. ` +
     `Of the ${m.adaptive_cells.toLocaleString()} allocated cells, ` +
-    `${m.occupied.toLocaleString()} carry evidence after ${D.terrain.frames} sweeps — ` +
+    `${m.occupied.toLocaleString()} carry evidence after ${D.terrain.frames} sweeps, ` +
     `the rest is headroom the vehicle drives into.`;
 })();
 
@@ -406,7 +406,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   legend("lg-cov", keys.map((k,i)=>({n:nm[k], c:col[i]})));
   document.getElementById("say-cov").innerHTML =
     `Every cell SemanticKITTI labels as road counts, whether the map has seen ` +
-    `it or not — a cell with no evidence is <em>no evidence</em>, not an ` +
+    `it or not, a cell with no evidence is <em>no evidence</em>, not an ` +
     `omission. One sweep answers for ${fmt(100*t.single.covered,0)}% of them; ` +
     `<span class="hl">${t.frames} sweeps answer for ${fmt(100*t.accumulated.covered,0)}%</span>.`;
   table("t-cov", ["map"].concat(keys.map(k=>nm[k])).concat(["covered"]),
@@ -421,7 +421,9 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
 /* --------------------------------------------------------------------- ROC */
 (function () {
   const r = D.estimators, svg = document.getElementById("c-roc");
-  const W=1000,H=420,L=64,R=150,T=16,B=48;
+  // T leaves room for the y caption ABOVE the top gridline; without it the
+  // caption and the 100% tick share the same corner and overprint
+  const W=1000,H=440,L=64,R=40,T=46,B=52;
   const x = v => L + v*(W-L-R), y = v => H-B - v*(H-B-T);
   for (let i=0;i<=5;i++){
     const gy=y(i/5);
@@ -433,9 +435,10 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
     el("text",{x:gx,y:H-B+20,class:"ax","text-anchor":"middle"},svg).textContent=(i*20)+"%";
   }
   el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),class:"axis"},svg);
-  el("text",{x:(L+W-R)/2,y:H-8,class:"lb","text-anchor":"middle"},
+  el("text",{x:(L+W-R)/2,y:H-10,class:"lb","text-anchor":"middle"},
      svg).textContent="cells holding an obstacle that were called drivable";
-  el("text",{x:16,y:T+6,class:"lb"},svg).textContent="road found";
+  el("text",{x:L-10,y:T-16,class:"lb","text-anchor":"end"},
+     svg).textContent="road found";
 
   const series=[{k:"gridmap",n:"grid_map filter chain",c:"var(--s1)",a:r.auc_gridmap},
                 {k:"ours",n:"our estimator",c:"var(--s2)",a:r.auc_ours}];
@@ -445,17 +448,37 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
     const d=pts.map((p,i)=>`${i?"L":"M"}${x(p.fp).toFixed(1)},${y(p.tp).toFixed(1)}`).join("");
     el("path",{d,fill:"none",stroke:s.c,"stroke-width":2,
                "stroke-linejoin":"round"},svg);
-    const last=pts[pts.length-1];
-    el("text",{x:Math.min(x(last.fp)+10,W-R+8),y:y(last.tp)+4,class:"vl",
-               fill:s.c},svg).textContent=s.n;
   });
-  legend("lg-roc",series.map(s=>({n:`${s.n} — AUC ${fmt(s.a,3)}`,c:s.c})));
+
+  // Direct-label where the curves are FURTHEST APART, not at their ends.
+  // Both ROC curves converge on the same top-right corner, so endpoint labels
+  // land on each other; the widest gap is the one place a label can sit beside
+  // its own curve and be unambiguous.
+  const tpAt=(pts,f)=>{let b=0;for(const p of pts) if(p.fp<=f) b=Math.max(b,p.tp);return b;};
+  let bestF=0.1, bestGap=-1;
+  for(let f=0.02; f<=0.6; f+=0.01){
+    const gap=Math.abs(tpAt(r.gridmap,f)-tpAt(r.ours,f));
+    if(gap>bestGap){bestGap=gap; bestF=f;}
+  }
+  series.forEach(s=>{
+    if(!r[s.k].length) return;
+    const tp=tpAt(r[s.k],bestF), px=x(bestF), py=y(tp);
+    el("circle",{cx:px,cy:py,r:5,fill:s.c,stroke:"var(--surface-1)",
+                 "stroke-width":2},svg);
+    const above = tpAt(r.gridmap,bestF) >= tpAt(r.ours,bestF)
+      ? (s.k==="gridmap") : (s.k==="ours");
+    el("text",{x:px+12,y:py+(above?-9:17),class:"vl",fill:s.c},
+       svg).textContent=s.n;
+    el("text",{x:px+12,y:py+(above?5:31),class:"ax"},
+       svg).textContent=`${fmt(100*tp,1)}% of road at ${fmt(100*bestF,1)}% false`;
+  });
+  legend("lg-roc",series.map(s=>({n:`${s.n}, AUC ${fmt(s.a,3)}`,c:s.c})));
   document.getElementById("say-roc").innerHTML =
     `Both estimators run on the same accumulated map, so the curve isolates the ` +
     `estimator. Ground truth is SemanticKITTI: ${r.n_road.toLocaleString()} road ` +
     `cells against ${r.n_obstacle.toLocaleString()} holding a building, pole, ` +
     `vehicle or vegetation. <span class="hl">grid_map's chain dominates at every ` +
-    `operating point</span> — AUC ${fmt(r.auc_gridmap,3)} against ${fmt(r.auc_ours,3)} — ` +
+    `operating point</span>, AUC ${fmt(r.auc_gridmap,3)} against ${fmt(r.auc_ours,3)}, ` +
     `so it is the default.`;
   const at=(pts,b)=>{let best=0;for(const p of pts) if(p.fp<=b) best=Math.max(best,p.tp);return best;};
   table("t-roc",["false-drivable budget","grid_map","ours"],
@@ -464,7 +487,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   document.getElementById("n-roc").innerHTML =
     `Ours takes slope as the largest step to a four-neighbour and roughness as ` +
     `the spread inside one cell. grid_map fits a plane by PCA over a circular ` +
-    `neighbourhood and measures deviation from the local mean surface — it sees ` +
+    `neighbourhood and measures deviation from the local mean surface, it sees ` +
     `bumpiness at scales larger than a single cell, which is what a wheel feels.`;
 })();
 
@@ -507,7 +530,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   document.getElementById("say-can").innerHTML =
     `Up and to the left is better. Replacing PointNet's learned T-Net with a ` +
     `deterministic PCA yaw estimate is <span class="hl">both more accurate and ` +
-    `${fmt(c.tnet3.ms/c.pca2_yaw.ms,0)}× cheaper</span> — F1 ${fmt(c.pca2_yaw.f1,4)} ` +
+    `${fmt(c.tnet3.ms/c.pca2_yaw.ms,0)}× cheaper</span>, F1 ${fmt(c.pca2_yaw.f1,4)} ` +
     `against ${fmt(c.tnet3.f1,4)}, at ${fmt(c.pca2_yaw.ms,3)} ms on CPU against ` +
     `${fmt(c.tnet3.ms,2)} ms on GPU. Full 3-D PCA is worse than yaw-only: it ` +
     `canonicalises the <em>visible surface</em>, which changes with viewpoint.`;
@@ -521,7 +544,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
 (function () {
   const ap = D.detector_ap_external, svg=document.getElementById("c-ap");
   const cls = Object.keys(ap.iou_sweep), ths=["0.3","0.5","0.7"];
-  const W=1000,H=340,L=56,R=24,T=18,B=54;
+  const W=1000,H=360,L=56,R=24,T=42,B=54;
   const gw=(W-L-R)/ths.length;
   const y = v => H-B - v/70*(H-B-T);
   [0,20,40,60].forEach(t=>{
@@ -541,18 +564,18 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
       hover(g,`<b>${c}</b> at IoU ${t}<br>AP ${fmt(v,2)}`);
     });
   });
-  el("text",{x:16,y:T,class:"lb"},svg).textContent="AP %";
+  el("text",{x:0,y:T-22,class:"lb"},svg).textContent="AP %";
   legend("lg-ap",cls.map((c,i)=>({n:c,c:S[i]})));
   document.getElementById("say-ap").innerHTML =
     `A steep fall from 0.3 to 0.7 means the objects are found and classified but ` +
     `the boxes are not tight enough. Car holds ${fmt(ap.iou_sweep.Car["0.5"],1)} ` +
-    `at IoU 0.5 and ${fmt(ap.iou_sweep.Car["0.7"],1)} at 0.7 — the median box ` +
+    `at IoU 0.5 and ${fmt(ap.iou_sweep.Car["0.7"],1)} at 0.7, the median box ` +
     `clears the bar, a large minority does not.`;
   table("t-ap",["class"].concat(ths.map(t=>"IoU "+t)),
     cls.map(c=>[c].concat(ths.map(t=>fmt(ap.iou_sweep[c][t],2)))));
   document.getElementById("n-ap").innerHTML =
     `${ap.source}. Published end-to-end detectors report roughly 70–77 AP for ` +
-    `Car at IoU 0.7 — this is a cluster-proposal pipeline with a ` +
+    `Car at IoU 0.7, this is a cluster-proposal pipeline with a ` +
     `${(D.model.params/1e6).toFixed(2)} M-parameter classifier, and its ` +
     `contribution is the canonicalisation above, not raw AP.`;
 })();
@@ -562,7 +585,9 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
   const cr = D.detector_ap_external.cluster_recall_range;
   const svg=document.getElementById("c-cr");
   const cls=Object.keys(cr), bands=["0-20","20-40","40+"];
-  const W=1000,H=340,L=56,R=24,T=18,B=54;
+  // T clears the caption above the top gridline; at T=18 the caption and the
+  // 100% tick shared a baseline and overprinted
+  const W=1000,H=360,L=56,R=24,T=42,B=54;
   const gw=(W-L-R)/bands.length;
   const y=v=>H-B - v/100*(H-B-T);
   [0,25,50,75,100].forEach(t=>{
@@ -582,7 +607,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
       hover(g,`<b>${c}</b> at ${b} m<br>${fmt(v,1)}% reach the network`);
     });
   });
-  el("text",{x:16,y:T,class:"lb"},svg).textContent="reaching the network";
+  el("text",{x:0,y:T-22,class:"lb"},svg).textContent="reaching the network";
   legend("lg-cr",cls.map((c,i)=>({n:c,c:S[i]})));
   document.getElementById("say-cr").innerHTML =
     `Objects lost by clustering never reach the classifier, so this is a hard ` +
@@ -593,7 +618,7 @@ document.getElementById("tiles").innerHTML = tiles.map(t =>
     cls.map(c=>[c].concat(bands.map(b=>fmt(cr[c][b],1)+"%"))));
   document.getElementById("n-cr").innerHTML =
     `${D.detector_ap_external.source}. This is the most valuable thing left to ` +
-    `fix in the detector, and it needs no retraining — range-adaptive clustering ` +
+    `fix in the detector, and it needs no retraining, range-adaptive clustering ` +
     `raises the ceiling for every class at once.`;
 })();
 </script>

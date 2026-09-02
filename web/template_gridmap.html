@@ -34,7 +34,7 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
 <header>
   <h1>grid_map layers</h1>
   <div class="sub">Rendered from the emitted <code>grid_map_msgs/GridMap</code>
-    itself &mdash; decoded back out of the column-major Float32MultiArray, so
+    itself, decoded back out of the column-major Float32MultiArray, so
     this page is also a check that the serialisation round-trips.</div>
 </header>
 
@@ -60,15 +60,15 @@ code{background:#1c2128;padding:1px 5px;border-radius:3px;color:#adbac7}
 </div>
 
 <div class="foot">
-  <b>traversability</b> is scored against physical limits &mdash; 30&deg; slope,
-  15 cm step, 10 cm roughness &mdash; the way grid_map's own filter chain does
+  <b>traversability</b> is scored against physical limits, 30&deg; slope,
+  15 cm step, 10 cm roughness, the way grid_map's own filter chain does
   it, so ordinary road reads near 1. <b>drivable</b> is our calibrated verdict
   (1 drivable, 0.5 marginal, 0 non-drivable), whose 4 cm roughness threshold was
   swept against SemanticKITTI road labels for best F1. They are separate layers
   on purpose: a decision boundary tuned on one dataset is not a vehicle limit,
   and publishing one as the other paints good tarmac untraversable.
-  <b>obstacle_height</b> is geometric &mdash; how far the tallest return in a
-  cell stands above that cell's own ground &mdash; so unlike the detector it is
+  <b>obstacle_height</b> is geometric, how far the tallest return in a
+  cell stands above that cell's own ground, so unlike the detector it is
   not restricted to the forward field of view.
 </div>
 
@@ -191,7 +191,7 @@ for (const n of D.layers) {
   const f = Array.from(a).filter(Number.isFinite);
   const med = f.length ? pct(a, 0.5) : NaN;
   rows += '<tr data-name="' + n + '"><td>' + n + '</td><td>' +
-          (f.length ? med.toFixed(3) : '&mdash;') + '</td><td>' +
+          (f.length ? med.toFixed(3) : '-') + '</td><td>' +
           f.length.toLocaleString() + '</td></tr>';
 }
 document.getElementById('stats').innerHTML = rows;
