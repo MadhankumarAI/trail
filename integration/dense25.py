@@ -245,7 +245,7 @@ class DenseMap:
         out["zmin"] = out["zomin"] = out["gmin"]
         out["zsum"] = out["gsum"]        # no separate all-point statistics
         out["zsq"] = out["gsq"]
-        out["hist"] = np.zeros((int(ok.sum()), 8))
+        out["hist"] = np.zeros((len(sel), 8))
         return out
 
     def stats(self):
@@ -314,3 +314,150 @@ def selftest():
 
 if __name__ == "__main__":
     selftest()
+
+
+# --------------------------------------------------------------------------
+# numba-backed map. Same semantics as DenseMap above, one fused kernel.
+# --------------------------------------------------------------------------
+
+from dense_numba import (scatter, align_offset, shift_tier, NROW,
+                         scatter_raw, align_raw,
+                         scatter_ring, align_ring, clear_strip,
+                         N as R_N, NG as R_NG, GSUM as R_GSUM, GSQ as R_GSQ,
+                         GW as R_GW, GWZ as R_GWZ, GWZ2 as R_GWZ2,
+                         ZMAX as R_ZMAX, GMIN as R_GMIN)
+
+_ROW = {"n": R_N, "ng": R_NG, "gsum": R_GSUM, "gsq": R_GSQ,
+        "gw": R_GW, "gwz": R_GWZ, "gwz2": R_GWZ2}
+
+
+class FastMap:
+    """DenseMap with the scatter, the alignment and the shift in numba.
+
+    The layout is the difference: every tier lives in one flat (9, total)
+    buffer with an offset table, so the kernel takes plain arrays and the
+    parallel loop can run over tiers without touching shared cells.
+    """
+
+    def __init__(self, tiers=TIERS, trust=20.0):
+        self.res = np.array([t[0] for t in tiers], float)
+        self.n = np.array([int(round(2 * h / r)) for r, h in tiers], np.int64)
+        self.org = np.zeros((len(tiers), 2))
+        sizes = self.n * self.n
+        self.off = np.concatenate([[0], np.cumsum(sizes)]).astype(np.int64)
+        self.acc = np.zeros((NROW, int(sizes.sum())))
+        self.acc[R_ZMAX] = -np.inf
+        self.acc[R_GMIN] = np.inf
+        self.start = np.zeros((len(tiers), 2), np.int64)
+        self.trust = float(trust)
+        self.dz = 0.0
+
+    def _move(self, pos):
+        """Recentre by advancing the ring origin, not by moving the data.
+
+        The physical version relocated 980k cells across nine rows every frame
+        -- about 40 ms, five times the scatter it served. This clears only the
+        strip that came into view, which at 5 cm and 0.9 m of travel is 18 rows
+        of 480 instead of all 480.
+        """
+        for t in range(len(self.res)):
+            d = np.rint((pos - self.org[t]) / self.res[t]).astype(np.int64)
+            if not d.any():
+                continue
+            nt = int(self.n[t])
+            dx, dy = int(d[0]), int(d[1])
+            if abs(dx) >= nt or abs(dy) >= nt:
+                # travelled further than the tier is wide: nothing survives
+                a, b = self.off[t], self.off[t + 1]
+                self.acc[:, a:b] = 0.0
+                self.acc[R_ZMAX, a:b] = -np.inf
+                self.acc[R_GMIN, a:b] = np.inf
+            else:
+                # rows leaving the trailing edge become the new leading edge
+                sx0 = int(self.start[t, 0]) if dx > 0 else                     int(self.start[t, 0] + nt + dx)
+                sy0 = int(self.start[t, 1]) if dy > 0 else                     int(self.start[t, 1] + nt + dy)
+                clear_strip(self.acc, self.off, self.n, t,
+                            sx0 % nt, abs(dx), sy0 % nt, abs(dy))
+            self.start[t, 0] = (self.start[t, 0] + dx) % nt
+            self.start[t, 1] = (self.start[t, 1] + dy) % nt
+            self.org[t] = self.org[t] + d * self.res[t]
+
+    def ingest(self, pts_velo, lab, T_w_velo, moving=None, groundcls=(0, 1)):
+        """Fold one sweep in. The kernels read the raw points directly."""
+        if moving is not None:
+            keep = ~moving
+            pts_velo, lab = pts_velo[keep], lab[keep]
+        if not len(pts_velo):
+            return self
+
+        # No copies here. pts_velo[:, :3] is a non-contiguous view, so
+        # ascontiguousarray duplicated 2.9 MB every frame purely to satisfy the
+        # kernel signature; the kernel now indexes columns itself and takes the
+        # sweep as it arrives, extra columns and all. asarray likewise returns
+        # the same buffer when the dtype already matches, where astype always
+        # copies.
+        pts = pts_velo if pts_velo.flags["C_CONTIGUOUS"] else             np.ascontiguousarray(pts_velo)
+        lab = np.asarray(lab, np.int64)
+        # a lookup indexed by label beats np.isin inside a loop, and lets the
+        # kernel decide ground-ness without a precomputed mask array
+        gnd = np.zeros(int(max(lab.max(), max(groundcls))) + 1, np.bool_)
+        for c in groundcls:
+            gnd[c] = True
+        R = np.ascontiguousarray(T_w_velo[:3, :3])
+        tv = np.ascontiguousarray(T_w_velo[:3, 3])
+        t2 = self.trust * self.trust
+
+        self._move(T_w_velo[:2, 3])
+
+        # drift compensation, on the coarsest tier -- the same correction the
+        # sparse map applies, and the thing whose absence cost 13 pp of
+        # drivable road when this class was first written without it
+        last = len(self.res) - 1
+        diffs = align_ring(pts, lab, R, tv, t2, gnd, self.org, self.res,
+                           self.n, self.off, self.start, self.acc, last)
+        dz = float(np.median(diffs)) if len(diffs) >= 100 else 0.0
+        self.dz = dz if abs(dz) <= 0.5 else 0.0
+
+        scatter_ring(pts, lab, R, tv, t2, gnd, SIGMA0 ** 2, SIGMA_R ** 2,
+                     self.dz, self.org, self.res, self.n, self.off,
+                     self.start, self.acc)
+        return self
+
+    def cells(self, level=0, min_pts=1):
+        a, b = self.off[level], self.off[level + 1]
+        nt, r = int(self.n[level]), self.res[level]
+        sx, sy = int(self.start[level, 0]), int(self.start[level, 1])
+        blk = self.acc[:, a:b]
+        ok = blk[R_N] >= min_pts
+        # Undo the ring rotation in the INDEX, not in the data. Rolling the
+        # buffer straight moved 9 x 250k cells on every query to read a few
+        # thousand of them, and cost more than the drivability it fed. Here
+        # only the occupied cells are converted, and the conversion is two
+        # modulos.
+        sel = np.flatnonzero(ok)
+        bi, bj = sel // nt, sel % nt
+        mi = (bi - sx) % nt - nt // 2
+        mj = (bj - sy) % nt - nt // 2
+        out = {k: blk[v][sel] for k, v in _ROW.items()}
+        out["zmax"] = blk[R_ZMAX][sel]
+        out["gmin"] = blk[R_GMIN][sel]
+        out["zmin"] = out["zomin"] = out["gmin"]
+        out["zsum"], out["zsq"] = out["gsum"], out["gsq"]
+        out["ix"] = mi + int(round(self.org[level, 0] / r))
+        out["iy"] = mj + int(round(self.org[level, 1] / r))
+        out["hist"] = np.zeros((len(sel), 8))
+        return out
+
+    def _grid(self, level, nt):
+        if not hasattr(self, "_gcache"):
+            self._gcache = {}
+        if level not in self._gcache:
+            gi = np.arange(nt) - nt // 2
+            gx, gy = np.meshgrid(gi, gi, indexing="ij")
+            self._gcache[level] = (gx.ravel(), gy.ravel())
+        return self._gcache[level]
+
+    def stats(self):
+        return {"tiers": len(self.res),
+                "cells_allocated": int(self.acc.shape[1]),
+                "cells_occupied": int((self.acc[R_N] > 0).sum())}
