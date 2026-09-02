@@ -1,0 +1,599 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Adaptive 2.5D — measured results</title>
+<style>
+.viz-root, body {
+  color-scheme: light;
+  --surface-0:#f6f6f4; --surface-1:#fcfcfb; --surface-2:#eeeeea;
+  --line:#dedcd6; --line-soft:#e9e7e2;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#84837d;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4;
+  --good:#0ca30c; --critical:#d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root,
+  :root:where(:not([data-theme="light"])) body {
+    color-scheme: dark;
+    --surface-0:#131312; --surface-1:#1a1a19; --surface-2:#232322;
+    --line:#3a3a37; --line-soft:#2c2c2a;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8e8d84;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+    --good:#0ca30c; --critical:#d03b3b;
+  }
+}
+:root[data-theme="dark"] .viz-root, :root[data-theme="dark"] body {
+  color-scheme: dark;
+  --surface-0:#131312; --surface-1:#1a1a19; --surface-2:#232322;
+  --line:#3a3a37; --line-soft:#2c2c2a;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8e8d84;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181;
+  --good:#0ca30c; --critical:#d03b3b;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--surface-0);color:var(--text-primary);
+  font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 28px 64px}
+
+header{padding:44px 0 26px}
+.eyebrow{color:var(--s1);font-size:11.5px;font-weight:650;letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:9px}
+h1{margin:0;font-size:30px;font-weight:660;letter-spacing:-.025em;line-height:1.15}
+.lede{color:var(--text-secondary);margin-top:11px;max-width:74ch;font-size:15px}
+.meta{color:var(--text-muted);font-size:12px;margin-top:14px}
+
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:26px 0 8px}
+@media(max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface-1);border:1px solid var(--line);border-radius:12px;
+  padding:18px 18px 16px}
+.tile .v{font-size:32px;font-weight:660;letter-spacing:-.03em;line-height:1.05}
+.tile .k{color:var(--text-muted);font-size:11.5px;text-transform:uppercase;
+  letter-spacing:.07em;margin-top:7px}
+.tile .sub{color:var(--text-secondary);font-size:12.5px;margin-top:6px}
+
+section{background:var(--surface-1);border:1px solid var(--line);
+  border-radius:12px;padding:20px 22px 18px;margin-top:16px}
+h2{margin:0 0 4px;font-size:16px;font-weight:640;letter-spacing:-.015em}
+.say{color:var(--text-secondary);font-size:13px;margin:0 0 16px;max-width:80ch}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 12px}
+.lg{display:inline-flex;gap:7px;align-items:center;font-size:12px;
+  color:var(--text-secondary)}
+.sw{width:10px;height:10px;border-radius:3px;flex:none}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.ax{font-size:11px;fill:var(--text-muted);font-variant-numeric:tabular-nums}
+.lb{font-size:11.5px;fill:var(--text-secondary)}
+.vl{font-size:11.5px;fill:var(--text-primary);font-variant-numeric:tabular-nums;
+  font-weight:600}
+.grid{stroke:var(--line-soft);stroke-width:1}
+.axis{stroke:var(--line);stroke-width:1}
+
+.tblbtn{background:none;border:1px solid var(--line);color:var(--text-secondary);
+  border-radius:7px;padding:4px 10px;font:inherit;font-size:11.5px;cursor:pointer;
+  margin-top:12px}
+.tblbtn:hover{background:var(--surface-2);color:var(--text-primary)}
+table{border-collapse:collapse;width:100%;margin-top:12px;
+  font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;text-align:right;font-size:12.5px;
+  border-bottom:1px solid var(--line-soft)}
+th:first-child,td:first-child{text-align:left}
+thead th{color:var(--text-muted);font-weight:600;font-size:10.5px;
+  text-transform:uppercase;letter-spacing:.06em}
+
+.tip{position:fixed;pointer-events:none;background:var(--surface-1);
+  border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12px;
+  box-shadow:0 6px 20px rgba(0,0,0,.16);opacity:0;transition:opacity .1s;z-index:50;
+  font-variant-numeric:tabular-nums}
+.note{color:var(--text-muted);font-size:11.5px;margin-top:14px;
+  padding-top:12px;border-top:1px solid var(--line-soft)}
+.hl{color:var(--text-primary);font-weight:600}
+</style>
+
+<div class="viz-root">
+<div class="wrap">
+<header>
+  <div class="eyebrow">SIH 2026 · PS 26053</div>
+  <h1>Adaptive variable-resolution 2.5D lidar mapping</h1>
+  <div class="lede">Every figure below is recomputed from the current code by
+    <code>integration/metrics.py</code>, on real KITTI sweeps, so the charts
+    cannot drift from the pipeline. Two panels are marked as measured
+    elsewhere — the detector's AP needs the full validation split and a GPU.</div>
+  <div class="meta" id="meta"></div>
+</header>
+
+<div class="tiles" id="tiles"></div>
+
+<section>
+  <h2>Frame budget</h2>
+  <p class="say" id="say-fps"></p>
+  <div class="legend" id="lg-fps"></div>
+  <svg id="c-fps" viewBox="0 0 1000 200"></svg>
+  <div class="say" style="margin:14px 0 6px;font-size:12.5px">
+    The same 94 ms frame at its own scale, because at the shared scale above it
+    is 126 pixels wide and its composition cannot be read:</div>
+  <svg id="c-fps2" viewBox="0 0 1000 76"></svg>
+  <button class="tblbtn" data-t="t-fps">Table view</button>
+  <div id="t-fps" hidden></div>
+  <div class="note" id="n-fps"></div>
+</section>
+
+<section>
+  <h2>Map memory for the same 100 m of ground</h2>
+  <p class="say" id="say-mem"></p>
+  <svg id="c-mem" viewBox="0 0 1000 190"></svg>
+  <button class="tblbtn" data-t="t-mem">Table view</button>
+  <div id="t-mem" hidden></div>
+  <div class="note" id="n-mem"></div>
+</section>
+
+<section>
+  <h2>Road the map can actually answer for</h2>
+  <p class="say" id="say-cov"></p>
+  <div class="legend" id="lg-cov"></div>
+  <svg id="c-cov" viewBox="0 0 1000 200"></svg>
+  <button class="tblbtn" data-t="t-cov">Table view</button>
+  <div id="t-cov" hidden></div>
+  <div class="note" id="n-cov"></div>
+</section>
+
+<section>
+  <h2>Traversability estimator: grid_map's filter chain against ours</h2>
+  <p class="say" id="say-roc"></p>
+  <div class="legend" id="lg-roc"></div>
+  <svg id="c-roc" viewBox="0 0 1000 420"></svg>
+  <button class="tblbtn" data-t="t-roc">Table view</button>
+  <div id="t-roc" hidden></div>
+  <div class="note" id="n-roc"></div>
+</section>
+
+<section>
+  <h2>Canonicalisation: PCA against the learned T-Net</h2>
+  <p class="say" id="say-can"></p>
+  <svg id="c-can" viewBox="0 0 1000 380"></svg>
+  <button class="tblbtn" data-t="t-can">Table view</button>
+  <div id="t-can" hidden></div>
+  <div class="note" id="n-can"></div>
+</section>
+
+<section>
+  <h2>Detection AP as the IoU bar rises</h2>
+  <p class="say" id="say-ap"></p>
+  <div class="legend" id="lg-ap"></div>
+  <svg id="c-ap" viewBox="0 0 1000 340"></svg>
+  <button class="tblbtn" data-t="t-ap">Table view</button>
+  <div id="t-ap" hidden></div>
+  <div class="note" id="n-ap"></div>
+</section>
+
+<section>
+  <h2>Cluster recall by range — the ceiling on detection</h2>
+  <p class="say" id="say-cr"></p>
+  <div class="legend" id="lg-cr"></div>
+  <svg id="c-cr" viewBox="0 0 1000 340"></svg>
+  <button class="tblbtn" data-t="t-cr">Table view</button>
+  <div id="t-cr" hidden></div>
+  <div class="note" id="n-cr"></div>
+</section>
+</div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const D = __METRICS__;
+const SVG = "http://www.w3.org/2000/svg";
+const S = ["--s1","--s2","--s3","--s4","--s5"].map(v=>`var(${v})`);
+const tip = document.getElementById("tip");
+
+const el = (n, a = {}, p) => {
+  const e = document.createElementNS(SVG, n);
+  for (const k in a) e.setAttribute(k, a[k]);
+  if (p) p.appendChild(e);
+  return e;
+};
+const fmt = (v, d = 1) => v.toLocaleString(undefined,
+  {minimumFractionDigits: d, maximumFractionDigits: d});
+
+function hover(node, html) {
+  node.addEventListener("mousemove", e => {
+    tip.innerHTML = html;
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 210) + "px";
+    tip.style.top = (e.clientY - 12) + "px";
+  });
+  node.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+}
+
+function legend(id, items) {
+  document.getElementById(id).innerHTML = items.map(
+    (it, i) => `<span class="lg"><i class="sw" style="background:${it.c}"></i>${it.n}</span>`
+  ).join("");
+}
+
+function table(id, head, rows) {
+  document.getElementById(id).innerHTML =
+    "<table><thead><tr>" + head.map(h => `<th>${h}</th>`).join("") +
+    "</tr></thead><tbody>" + rows.map(r =>
+      "<tr>" + r.map(c => `<td>${c}</td>`).join("") + "</tr>").join("") +
+    "</tbody></table>";
+}
+for (const b of document.querySelectorAll(".tblbtn")) {
+  b.onclick = () => {
+    const t = document.getElementById(b.dataset.t);
+    t.hidden = !t.hidden;
+    b.textContent = t.hidden ? "Table view" : "Hide table";
+  };
+}
+
+/* ---------------------------------------------------------------- header */
+const sc = D.scene, tm = D.timing, tb = D.timing_before;
+document.getElementById("meta").textContent =
+  `${sc.frames} consecutive sweeps of KITTI sequence ${sc.sequence} · ` +
+  `${sc.points_per_sweep.toLocaleString()} points each · ${sc.device} · ` +
+  `generated ${D.generated}`;
+
+const fps = 1000 / tm.total.median, fps95 = 1000 / tm.total.p95;
+const tiles = [
+  {v: fmt(fps, 1), k: "frames per second",
+   s: `${fmt(fps95,1)} at p95 · 10 Hz budget is 100 ms`},
+  {v: fmt(tb.total / tm.total.median, 1) + "×",
+   k: "faster end to end", s: `${fmt(tb.total,0)} → ${fmt(tm.total.median,1)} ms`},
+  {v: fmt(D.memory.reduction, 1) + "×", k: "less map memory",
+   s: `${fmt(D.memory.adaptive_bytes/1e6,0)} MB against ${fmt(D.memory.uniform_bytes/1e6,0)} MB uniform`},
+  {v: fmt(100*D.terrain.accumulated.covered, 0) + "%", k: "of road answered for",
+   s: `against ${fmt(100*D.terrain.single.covered,0)}% from one sweep`},
+];
+document.getElementById("tiles").innerHTML = tiles.map(t =>
+  `<div class="tile"><div class="v">${t.v}</div><div class="k">${t.k}</div>
+   <div class="sub">${t.sub||t.s}</div></div>`).join("");
+
+/* ------------------------------------------------------------ frame budget */
+(function () {
+  const stages = ["ground","detect","accumulate","drivability"];
+  const names = {ground:"ground segmentation", detect:"detection",
+                 accumulate:"map accumulation", drivability:"drivability"};
+  const rows = [
+    {n: "before", v: stages.map(s => tb[s]), tot: tb.total},
+    {n: "now",    v: stages.map(s => tm[s].median), tot: tm.total.median},
+  ];
+  const svg = document.getElementById("c-fps");
+  const W = 1000, L = 86, R = 30, max = tb.total * 1.02;
+  const x = v => L + v / max * (W - L - R);
+
+  // the 100 ms budget, drawn once as a reference rule
+  const bx = x(100);
+  el("line", {x1: bx, x2: bx, y1: 14, y2: 150, class: "grid",
+              "stroke-dasharray": ""}, svg);
+  el("text", {x: bx + 6, y: 12, class: "ax"}, svg).textContent = "100 ms — 10 Hz budget";
+
+  rows.forEach((r, ri) => {
+    const y = 34 + ri * 62, h = 34;
+    el("text", {x: L - 12, y: y + h/2 + 4, class: "lb", "text-anchor": "end"},
+       svg).textContent = r.n;
+    let acc = 0;
+    r.v.forEach((v, i) => {
+      const x0 = x(acc), x1 = x(acc + v);
+      const w = Math.max(x1 - x0 - 2, 1);          // 2px surface gap
+      const g = el("g", {}, svg);
+      el("rect", {x: x0, y, width: w, height: h, rx: 4,
+                  fill: S[i]}, g);
+      if (w > 62) {
+        el("text", {x: x0 + w/2, y: y + h/2 + 4, class: "vl",
+                    "text-anchor": "middle",
+                    fill: "var(--surface-1)"}, g).textContent = fmt(v,0)+" ms";
+      }
+      hover(g, `<b>${names[stages[i]]}</b><br>${fmt(v,1)} ms · ${fmt(100*v/r.tot,1)}% of frame`);
+      acc += v;
+    });
+    el("text", {x: x(r.tot) + 10, y: y + h/2 + 4, class: "vl"},
+       svg).textContent = fmt(r.tot,1) + " ms";
+  });
+  // Second panel, own scale. A second SCALE is fine; a second AXIS on the
+  // same plot would not be -- the reader would compare lengths that mean
+  // different things.
+  (function () {
+    const s2 = document.getElementById("c-fps2");
+    const m2 = tm.total.median * 1.02, L2 = 86, R2 = 90;
+    const x2 = v => L2 + v / m2 * (W - L2 - R2);
+    const y = 12, h = 34;
+    el("text", {x: L2 - 12, y: y + h/2 + 4, class: "lb", "text-anchor": "end"},
+       s2).textContent = "now";
+    let acc = 0;
+    stages.forEach((st, i) => {
+      const v = tm[st].median, x0 = x2(acc), w = Math.max(x2(acc+v) - x0 - 2, 1);
+      const g = el("g", {}, s2);
+      el("rect", {x: x0, y, width: w, height: h, rx: 4, fill: S[i]}, g);
+      if (w > 62) el("text", {x: x0 + w/2, y: y + h/2 + 4, class: "vl",
+        "text-anchor": "middle", fill: "var(--surface-1)"},
+        g).textContent = fmt(v,1) + " ms";
+      hover(g, `<b>${names[st]}</b><br>${fmt(v,1)} ms · ${fmt(100*v/tm.total.median,1)}% of frame`);
+      acc += v;
+    });
+    el("text", {x: x2(tm.total.median) + 10, y: y + h/2 + 4, class: "vl"},
+       s2).textContent = fmt(tm.total.median,1) + " ms";
+    el("text", {x: L2, y: y + h + 18, class: "ax"}, s2).textContent =
+      "0 ms";
+    el("text", {x: x2(tm.total.median), y: y + h + 18, class: "ax",
+                "text-anchor": "end"}, s2).textContent =
+      fmt(tm.total.median,0) + " ms";
+  })();
+
+  legend("lg-fps", stages.map((s,i) => ({n: names[s], c: S[i]})));
+  document.getElementById("say-fps").innerHTML =
+    `Per stage, median over ${sc.frames} sweeps with warm-up discarded and GPU work ` +
+    `synchronised before the clock is read. Map accumulation was ${fmt(tb.accumulate,0)} ms ` +
+    `and is now <span class="hl">${fmt(tm.accumulate.median,1)} ms</span>; it was 62% of the frame and is now ` +
+    `${fmt(100*tm.accumulate.median/tm.total.median,0)}%.`;
+  table("t-fps", ["stage","before (ms)","now (ms)","p95 (ms)","speed-up"],
+    stages.map(s => [names[s], fmt(tb[s],1), fmt(tm[s].median,1),
+                     fmt(tm[s].p95,1), fmt(tb[s]/tm[s].median,1)+"×"])
+      .concat([["<b>total</b>", "<b>"+fmt(tb.total,1)+"</b>",
+                "<b>"+fmt(tm.total.median,1)+"</b>",
+                "<b>"+fmt(tm.total.p95,1)+"</b>",
+                "<b>"+fmt(tb.total/tm.total.median,1)+"×</b>"]]));
+  document.getElementById("n-fps").innerHTML =
+    `File reads are excluded — a sensor hands the points over in memory. ` +
+    `Ground segmentation and detection were not optimised here and are now ` +
+    `${fmt(100*(tm.ground.median+tm.detect.median)/tm.total.median,0)}% of the frame; ` +
+    `the map layer is ${fmt(100*(tm.accumulate.median+tm.drivability.median)/tm.total.median,0)}%.`;
+})();
+
+/* ------------------------------------------------------------------ memory */
+(function () {
+  const m = D.memory, svg = document.getElementById("c-mem");
+  const rows = [
+    {n: "uniform 5 cm", c: m.uniform_cells, b: m.uniform_bytes, col: "var(--s2)"},
+    {n: "adaptive tiers", c: m.adaptive_cells, b: m.adaptive_bytes, col: "var(--s1)"},
+  ];
+  const W = 1000, L = 132, R = 120, max = m.uniform_cells * 1.02;
+  const x = v => L + v / max * (W - L - R);
+  rows.forEach((r, i) => {
+    const y = 30 + i * 62, h = 36;
+    el("text", {x: L - 12, y: y + h/2 + 4, class: "lb", "text-anchor": "end"},
+       svg).textContent = r.n;
+    const g = el("g", {}, svg);
+    el("rect", {x: L, y, width: Math.max(x(r.c) - L, 2), height: h, rx: 4,
+                fill: r.col}, g);
+    hover(g, `<b>${r.n}</b><br>${r.c.toLocaleString()} cells<br>${fmt(r.b/1e6,0)} MB`);
+    el("text", {x: x(r.c) + 10, y: y + h/2 + 4, class: "vl"}, svg).textContent =
+      `${fmt(r.b/1e6,0)} MB`;
+  });
+  document.getElementById("say-mem").innerHTML =
+    `Both rows are dense allocations over the same 200 m square, so the ` +
+    `comparison isolates <em>foveation</em> — storing what is far away more ` +
+    `coarsely — rather than crediting it with the saving that sparsity gives ` +
+    `any hash map. <span class="hl">${fmt(m.reduction,1)}×</span> fewer cells, ` +
+    `and the cost is fixed rather than growing with the scene.`;
+  table("t-mem", ["tier","cell size","covers","cells"],
+    Object.entries(m.tiers).map(([k,v]) =>
+      [k, k, "±"+fmt(v.half_extent_m,0)+" m", v.cells.toLocaleString()])
+    .concat([["<b>adaptive total</b>","","","<b>"+m.adaptive_cells.toLocaleString()+"</b>"],
+             ["<b>uniform 5 cm</b>","5 cm","±100 m","<b>"+m.uniform_cells.toLocaleString()+"</b>"]]));
+  document.getElementById("n-mem").innerHTML =
+    `${m.rows_per_cell} accumulators per cell at ${m.bytes_per_value} bytes. ` +
+    `Of the ${m.adaptive_cells.toLocaleString()} allocated cells, ` +
+    `${m.occupied.toLocaleString()} carry evidence after ${D.terrain.frames} sweeps — ` +
+    `the rest is headroom the vehicle drives into.`;
+})();
+
+/* ---------------------------------------------------------------- coverage */
+(function () {
+  const t = D.terrain, svg = document.getElementById("c-cov");
+  const keys = ["drivable","marginal","non_drivable","unknown"];
+  const nm = {drivable:"drivable", marginal:"marginal",
+              non_drivable:"non-drivable", unknown:"no evidence"};
+  const col = ["var(--s3)","var(--s4)","var(--s2)","var(--surface-2)"];
+  const rows = [{n:"one sweep", d:t.single}, {n:`${t.frames} sweeps`, d:t.accumulated}];
+  const W = 1000, L = 108, R = 92;
+  const x = v => L + v * (W - L - R);
+  rows.forEach((r, ri) => {
+    const y = 34 + ri*62, h = 36; let acc = 0;
+    el("text", {x: L-12, y: y+h/2+4, class:"lb", "text-anchor":"end"},
+       svg).textContent = r.n;
+    keys.forEach((k, i) => {
+      const v = r.d[k], x0 = x(acc), w = Math.max(x(acc+v)-x0-2, 0.5);
+      const g = el("g", {}, svg);
+      el("rect", {x:x0, y, width:w, height:h, rx:4,
+                  fill: col[i],
+                  stroke: i===3 ? "var(--line)" : "none"}, g);
+      if (w > 58) el("text", {x:x0+w/2, y:y+h/2+4, class:"vl",
+        "text-anchor":"middle",
+        fill: i===3 ? "var(--text-secondary)" : "var(--surface-1)"},
+        g).textContent = fmt(100*v,0)+"%";
+      hover(g, `<b>${nm[k]}</b><br>${fmt(100*v,1)}% of ${r.d.n.toLocaleString()} road cells`);
+      acc += v;
+    });
+  });
+  legend("lg-cov", keys.map((k,i)=>({n:nm[k], c:col[i]})));
+  document.getElementById("say-cov").innerHTML =
+    `Every cell SemanticKITTI labels as road counts, whether the map has seen ` +
+    `it or not — a cell with no evidence is <em>no evidence</em>, not an ` +
+    `omission. One sweep answers for ${fmt(100*t.single.covered,0)}% of them; ` +
+    `<span class="hl">${t.frames} sweeps answer for ${fmt(100*t.accumulated.covered,0)}%</span>.`;
+  table("t-cov", ["map"].concat(keys.map(k=>nm[k])).concat(["covered"]),
+    rows.map(r => [r.n].concat(keys.map(k=>fmt(100*r.d[k],1)+"%"))
+      .concat([fmt(100*r.d.covered,1)+"%"])));
+  document.getElementById("n-cov").innerHTML =
+    `Scoring only the cells a map happens to hold rewards seeing less: on that ` +
+    `denominator one sweep reads 82.9% drivable against the accumulated map's ` +
+    `65.3%, purely by being graded on the near cells it can see.`;
+})();
+
+/* --------------------------------------------------------------------- ROC */
+(function () {
+  const r = D.estimators, svg = document.getElementById("c-roc");
+  const W=1000,H=420,L=64,R=150,T=16,B=48;
+  const x = v => L + v*(W-L-R), y = v => H-B - v*(H-B-T);
+  for (let i=0;i<=5;i++){
+    const gy=y(i/5);
+    el("line",{x1:L,x2:W-R,y1:gy,y2:gy,class:"grid"},svg);
+    el("text",{x:L-10,y:gy+4,class:"ax","text-anchor":"end"},svg).textContent=(i*20)+"%";
+  }
+  for (let i=0;i<=5;i++){
+    const gx=x(i/5);
+    el("text",{x:gx,y:H-B+20,class:"ax","text-anchor":"middle"},svg).textContent=(i*20)+"%";
+  }
+  el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),class:"axis"},svg);
+  el("text",{x:(L+W-R)/2,y:H-8,class:"lb","text-anchor":"middle"},
+     svg).textContent="cells holding an obstacle that were called drivable";
+  el("text",{x:16,y:T+6,class:"lb"},svg).textContent="road found";
+
+  const series=[{k:"gridmap",n:"grid_map filter chain",c:"var(--s1)",a:r.auc_gridmap},
+                {k:"ours",n:"our estimator",c:"var(--s2)",a:r.auc_ours}];
+  series.forEach(s=>{
+    const pts=r[s.k];
+    if(!pts.length) return;
+    const d=pts.map((p,i)=>`${i?"L":"M"}${x(p.fp).toFixed(1)},${y(p.tp).toFixed(1)}`).join("");
+    el("path",{d,fill:"none",stroke:s.c,"stroke-width":2,
+               "stroke-linejoin":"round"},svg);
+    const last=pts[pts.length-1];
+    el("text",{x:Math.min(x(last.fp)+10,W-R+8),y:y(last.tp)+4,class:"vl",
+               fill:s.c},svg).textContent=s.n;
+  });
+  legend("lg-roc",series.map(s=>({n:`${s.n} — AUC ${fmt(s.a,3)}`,c:s.c})));
+  document.getElementById("say-roc").innerHTML =
+    `Both estimators run on the same accumulated map, so the curve isolates the ` +
+    `estimator. Ground truth is SemanticKITTI: ${r.n_road.toLocaleString()} road ` +
+    `cells against ${r.n_obstacle.toLocaleString()} holding a building, pole, ` +
+    `vehicle or vegetation. <span class="hl">grid_map's chain dominates at every ` +
+    `operating point</span> — AUC ${fmt(r.auc_gridmap,3)} against ${fmt(r.auc_ours,3)} — ` +
+    `so it is the default.`;
+  const at=(pts,b)=>{let best=0;for(const p of pts) if(p.fp<=b) best=Math.max(best,p.tp);return best;};
+  table("t-roc",["false-drivable budget","grid_map","ours"],
+    [0.05,0.10,0.175,0.25,0.35].map(b=>
+      [`≤ ${fmt(100*b,1)}%`, fmt(100*at(r.gridmap,b),1)+"%", fmt(100*at(r.ours,b),1)+"%"]));
+  document.getElementById("n-roc").innerHTML =
+    `Ours takes slope as the largest step to a four-neighbour and roughness as ` +
+    `the spread inside one cell. grid_map fits a plane by PCA over a circular ` +
+    `neighbourhood and measures deviation from the local mean surface — it sees ` +
+    `bumpiness at scales larger than a single cell, which is what a wheel feels.`;
+})();
+
+/* --------------------------------------------------------- canonicalisation */
+(function () {
+  const c = D.canonicalisation_external.variants, svg = document.getElementById("c-can");
+  const W=1000,H=380,L=70,R=60,T=24,B=52;
+  const items = Object.entries(c).map(([k,v]) => ({k, ...v}));
+  const lx = v => Math.log10(Math.max(v, 0.02));
+  const xmin = lx(0.03), xmax = lx(30);
+  const x = v => L + (lx(v)-xmin)/(xmax-xmin)*(W-L-R);
+  const y = v => H-B - (v-0.68)/(0.86-0.68)*(H-B-T);
+  [0.70,0.74,0.78,0.82,0.86].forEach(t=>{
+    el("line",{x1:L,x2:W-R,y1:y(t),y2:y(t),class:"grid"},svg);
+    el("text",{x:L-10,y:y(t)+4,class:"ax","text-anchor":"end"},svg).textContent=t.toFixed(2);
+  });
+  [0.05,0.1,0.5,1,5,10,20].forEach(t=>{
+    el("text",{x:x(t),y:H-B+20,class:"ax","text-anchor":"middle"},
+       svg).textContent = t<1 ? t.toFixed(2) : t;
+  });
+  el("line",{x1:L,x2:W-R,y1:H-B,y2:H-B,class:"axis"},svg);
+  el("text",{x:(L+W-R)/2,y:H-10,class:"lb","text-anchor":"middle"},
+     svg).textContent="cost per batch, milliseconds (log scale)";
+  el("text",{x:16,y:T+2,class:"lb"},svg).textContent="F1";
+
+  const nm={none:"no canonicalisation", tnet3:"learned T-Net (GPU)",
+            pca3_skew:"PCA 3-D + skewness", pca2_yaw:"PCA yaw (ours)"};
+  items.forEach((it,i)=>{
+    const cx=x(Math.max(it.ms,0.03)), cy=y(it.f1);
+    const g=el("g",{},svg);
+    el("circle",{cx,cy,r:7,fill:S[i],stroke:"var(--surface-1)","stroke-width":2},g);
+    const right = cx < W-R-170;
+    el("text",{x: right?cx+14:cx-14, y:cy-8, class:"vl",
+               "text-anchor": right?"start":"end"},g).textContent=nm[it.k];
+    el("text",{x: right?cx+14:cx-14, y:cy+8, class:"ax",
+               "text-anchor": right?"start":"end"},g).textContent=
+      `F1 ${fmt(it.f1,3)} · ${it.ms?fmt(it.ms,3)+" ms":"free"}`;
+    hover(g,`<b>${nm[it.k]}</b><br>F1 ${fmt(it.f1,4)}<br>${fmt(it.ms,3)} ms`);
+  });
+  document.getElementById("say-can").innerHTML =
+    `Up and to the left is better. Replacing PointNet's learned T-Net with a ` +
+    `deterministic PCA yaw estimate is <span class="hl">both more accurate and ` +
+    `${fmt(c.tnet3.ms/c.pca2_yaw.ms,0)}× cheaper</span> — F1 ${fmt(c.pca2_yaw.f1,4)} ` +
+    `against ${fmt(c.tnet3.f1,4)}, at ${fmt(c.pca2_yaw.ms,3)} ms on CPU against ` +
+    `${fmt(c.tnet3.ms,2)} ms on GPU. Full 3-D PCA is worse than yaw-only: it ` +
+    `canonicalises the <em>visible surface</em>, which changes with viewpoint.`;
+  table("t-can",["variant","F1","ms per batch"],
+    items.map((it,i)=>[nm[it.k], fmt(it.f1,4), it.ms?fmt(it.ms,3):"0"]));
+  document.getElementById("n-can").innerHTML =
+    `Measured by <code>pnd.canon_study</code>, not by this page.`;
+})();
+
+/* ------------------------------------------------------------------ AP/IoU */
+(function () {
+  const ap = D.detector_ap_external, svg=document.getElementById("c-ap");
+  const cls = Object.keys(ap.iou_sweep), ths=["0.3","0.5","0.7"];
+  const W=1000,H=340,L=56,R=24,T=18,B=54;
+  const gw=(W-L-R)/ths.length;
+  const y = v => H-B - v/70*(H-B-T);
+  [0,20,40,60].forEach(t=>{
+    el("line",{x1:L,x2:W-R,y1:y(t),y2:y(t),class:"grid"},svg);
+    el("text",{x:L-10,y:y(t)+4,class:"ax","text-anchor":"end"},svg).textContent=t;
+  });
+  el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),class:"axis"},svg);
+  ths.forEach((t,ti)=>{
+    const x0=L+ti*gw, bw=(gw-34)/cls.length;
+    el("text",{x:x0+gw/2,y:H-B+22,class:"lb","text-anchor":"middle"},
+       svg).textContent=`IoU ${t}`;
+    cls.forEach((c,ci)=>{
+      const v=ap.iou_sweep[c][t], bx=x0+17+ci*bw;
+      const g=el("g",{},svg);
+      el("rect",{x:bx,y:y(v),width:Math.max(bw-2,1),height:y(0)-y(v),rx:4,
+                 fill:S[ci]},g);
+      hover(g,`<b>${c}</b> at IoU ${t}<br>AP ${fmt(v,2)}`);
+    });
+  });
+  el("text",{x:16,y:T,class:"lb"},svg).textContent="AP %";
+  legend("lg-ap",cls.map((c,i)=>({n:c,c:S[i]})));
+  document.getElementById("say-ap").innerHTML =
+    `A steep fall from 0.3 to 0.7 means the objects are found and classified but ` +
+    `the boxes are not tight enough. Car holds ${fmt(ap.iou_sweep.Car["0.5"],1)} ` +
+    `at IoU 0.5 and ${fmt(ap.iou_sweep.Car["0.7"],1)} at 0.7 — the median box ` +
+    `clears the bar, a large minority does not.`;
+  table("t-ap",["class"].concat(ths.map(t=>"IoU "+t)),
+    cls.map(c=>[c].concat(ths.map(t=>fmt(ap.iou_sweep[c][t],2)))));
+  document.getElementById("n-ap").innerHTML =
+    `${ap.source}. Published end-to-end detectors report roughly 70–77 AP for ` +
+    `Car at IoU 0.7 — this is a cluster-proposal pipeline with a ` +
+    `${(D.model.params/1e6).toFixed(2)} M-parameter classifier, and its ` +
+    `contribution is the canonicalisation above, not raw AP.`;
+})();
+
+/* ------------------------------------------------------------ cluster recall */
+(function () {
+  const cr = D.detector_ap_external.cluster_recall_range;
+  const svg=document.getElementById("c-cr");
+  const cls=Object.keys(cr), bands=["0-20","20-40","40+"];
+  const W=1000,H=340,L=56,R=24,T=18,B=54;
+  const gw=(W-L-R)/bands.length;
+  const y=v=>H-B - v/100*(H-B-T);
+  [0,25,50,75,100].forEach(t=>{
+    el("line",{x1:L,x2:W-R,y1:y(t),y2:y(t),class:"grid"},svg);
+    el("text",{x:L-10,y:y(t)+4,class:"ax","text-anchor":"end"},svg).textContent=t+"%";
+  });
+  el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),class:"axis"},svg);
+  bands.forEach((b,bi)=>{
+    const x0=L+bi*gw, bw=(gw-34)/cls.length;
+    el("text",{x:x0+gw/2,y:H-B+22,class:"lb","text-anchor":"middle"},
+       svg).textContent=b+" m";
+    cls.forEach((c,ci)=>{
+      const v=cr[c][b], bx=x0+17+ci*bw;
+      const g=el("g",{},svg);
+      el("rect",{x:bx,y:y(v),width:Math.max(bw-2,1),height:y(0)-y(v),rx:4,
+                 fill:S[ci]},g);
+      hover(g,`<b>${c}</b> at ${b} m<br>${fmt(v,1)}% reach the network`);
+    });
+  });
+  el("text",{x:16,y:T,class:"lb"},svg).textContent="reaching the network";
+  legend("lg-cr",cls.map((c,i)=>({n:c,c:S[i]})));
+  document.getElementById("say-cr").innerHTML =
+    `Objects lost by clustering never reach the classifier, so this is a hard ` +
+    `ceiling on AP no matter how good the network gets. ` +
+    `<span class="hl">Beyond 40 m we lose 60–90% of everything</span>, and a ` +
+    `third of pedestrians are lost at any range.`;
+  table("t-cr",["class"].concat(bands.map(b=>b+" m")),
+    cls.map(c=>[c].concat(bands.map(b=>fmt(cr[c][b],1)+"%"))));
+  document.getElementById("n-cr").innerHTML =
+    `${D.detector_ap_external.source}. This is the most valuable thing left to ` +
+    `fix in the detector, and it needs no retraining — range-adaptive clustering ` +
+    `raises the ceiling for every class at once.`;
+})();
+</script>
