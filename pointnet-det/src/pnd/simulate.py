@@ -22,12 +22,12 @@ the valid region obvious.
 Point classes exported, mapped onto the three categories PS 26053 asks for:
 
     0 unscored        outside the trained field of view
-    1 terrain         ground surface (drivable)
-    2 static          non-ground cluster the model calls background: walls,
-                      poles, vegetation, buildings
-    3 Car             \\
-    4 Pedestrian       > dynamic-capable classes
-    5 Cyclist         /
+    1-3 terrain       ground surface: drivable / marginal / non-drivable
+    4 static          non-ground cluster the model calls background:
+                      walls, poles, vegetation, buildings
+    5..               one index per trained object class, in kitti.CLASSES
+                      order, so the exported set follows the checkpoint
+                      rather than being written out here
 """
 from __future__ import annotations
 
@@ -101,7 +101,21 @@ def project(pts, calib):
 CLS_UNSCORED = 0
 CLS_DRIVABLE, CLS_MARGINAL, CLS_NONDRIV = 1, 2, 3
 CLS_STATIC = 4
-CLS_OFFSET = 4          # Car(1) -> 5, Pedestrian(2) -> 6, Cyclist(3) -> 7
+CLS_OFFSET = 4          # object classes follow CLS_STATIC in kitti.CLASSES
+                        # order, so the exported set grows with the class list
+
+
+def display_classes():
+    """Names for the exported point classes, derived rather than hardcoded.
+
+    This list used to end at Cyclist. A checkpoint trained with more classes
+    then emits indices with no name against them, and the viewer's legend and
+    colour table run off the end -- which shows up as objects drawn in the
+    wrong colour, not as an error.
+    """
+    from .kitti import CLASSES
+    return (["unscored", "drivable", "marginal", "non-drivable", "static"]
+            + list(CLASSES[1:]))
 
 # terrain.py's DRIVABLE/MARGINAL/NON_DRIVABLE are 0/1/2
 _TERR = {DRIVABLE: CLS_DRIVABLE, MARGINAL: CLS_MARGINAL,
@@ -359,8 +373,7 @@ def main() -> None:
 
     payload = {
         "frames": frames,
-        "classes": ["unscored", "drivable", "marginal", "non-drivable",
-                    "static", "Car", "Pedestrian", "Cyclist"],
+        "classes": display_classes(),
         "quant": 50,          # int16 units per metre
         "grid": {"nr": 24, "na": 72, "R": 70.0,
                  "cls": base64.b64encode(
